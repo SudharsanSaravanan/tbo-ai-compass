@@ -1,0 +1,7 @@
+.env
+tbo/
+USAGE.md
+instructions.md
+__pycache__/
+*.txt
+!requirements.txt
