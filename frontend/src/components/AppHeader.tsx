@@ -6,7 +6,6 @@ import tboLogo from "@/assets/tbo-logo.png";
 
 const navItems = [
   { to: "/", label: "Home" },
-  { to: "/discover", label: "Discover" },
   { to: "/experiences", label: "Experiences" },
   { to: "/my-trips", label: "My Trips" },
 ];

@@ -84,15 +84,6 @@ export const mockWeather = [
   { day: "Sun", temp: 30, condition: "Sunny", icon: "☀️" },
 ];
 
-export const mockDiscoverItems = [
-  { id: "h1", name: "Viceroy Bali", type: "hotel" as const, rating: 4.8, price: "$180/night", image: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=400&h=300&fit=crop", location: "Ubud", tags: ["Luxury", "Pool", "Spa"] },
-  { id: "h2", name: "Alila Seminyak", type: "hotel" as const, rating: 4.6, price: "$150/night", image: "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=400&h=300&fit=crop", location: "Seminyak", tags: ["Beach", "Modern", "Pool"] },
-  { id: "a1", name: "Mount Batur Sunrise Trek", type: "activity" as const, rating: 4.9, price: "$45", image: "https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?w=400&h=300&fit=crop", location: "Kintamani", tags: ["Adventure", "Nature", "Hiking"] },
-  { id: "a2", name: "Balinese Cooking Class", type: "activity" as const, rating: 4.7, price: "$35", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400&h=300&fit=crop", location: "Ubud", tags: ["Culture", "Food", "Workshop"] },
-  { id: "f1", name: "Locavore", type: "food" as const, rating: 4.9, price: "$$$", image: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=300&fit=crop", location: "Ubud", tags: ["Fine Dining", "Local", "Organic"] },
-  { id: "f2", name: "Sardine", type: "food" as const, rating: 4.6, price: "$$", image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop", location: "Seminyak", tags: ["Seafood", "Rice Field View", "Romantic"] },
-];
-
 export const mockChatMessages = [
   { role: "assistant" as const, content: "I've created a 7-day Bali itinerary for you! The trip includes cultural experiences in Ubud, beach days in Seminyak, and a sunset visit to Uluwatu Temple. Would you like to adjust anything?" },
   { role: "user" as const, content: "Can we add a cooking class on day 2?" },

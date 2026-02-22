@@ -9,7 +9,6 @@ import AppFooter from "@/components/AppFooter";
 import Index from "./pages/Index";
 import IntentPreview from "./pages/IntentPreview";
 import TripDashboard from "./pages/TripDashboard";
-import Discover from "./pages/Discover";
 import FoodDetails from "./pages/FoodDetails";
 import Experiences from "./pages/Experiences";
 import TripInfo from "./pages/TripInfo";
@@ -37,7 +36,6 @@ function AppLayout() {
           <Route path="/plan" element={<TripPlan />} />
           <Route path="/trip/:tripId" element={<TripDashboard />} />
           <Route path="/trip/:tripId/info" element={<TripInfo />} />
-          <Route path="/discover" element={<Discover />} />
           <Route path="/food/:venueId" element={<FoodDetails />} />
           <Route path="/experiences" element={<Experiences />} />
           <Route path="/microsite/create/:tripId" element={<MicrositeCreate />} />
