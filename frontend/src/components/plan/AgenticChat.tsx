@@ -4,7 +4,7 @@ import { Send, Mic, Check, Keyboard } from "lucide-react";
 import tboLogo from "@/assets/tbo-logo.png";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Orb } from "react-ai-orb";
+import { LiveWaveform } from "@/components/ui/live-waveform";
 import { useAudioLevel } from "@/hooks/useAudioLevel";
 
 interface ChatMessage {
@@ -20,6 +20,8 @@ interface AgenticChatProps {
   initialQuery: string;
   onStepComplete: (step: number, answer: string) => void;
   currentStep: number;
+  /** Called whenever the listening state changes so parent can mirror it to ProcessVisualization */
+  onListeningChange?: (listening: boolean) => void;
 }
 
 const STEPS = [
@@ -50,17 +52,19 @@ const STEPS = [
   },
 ];
 
-export default function AgenticChat({ initialQuery, onStepComplete, currentStep }: AgenticChatProps) {
+export default function AgenticChat({ initialQuery, onStepComplete, currentStep, onListeningChange }: AgenticChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
-  const [showVoice, setShowVoice] = useState(false);
+  // Voice mode is the default — users can toggle to keyboard
+  const [showVoice, setShowVoice] = useState(true);
   const [typing, setTyping] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { levelRef, start: startMic, stop: stopMic } = useAudioLevel();
 
-  // Sync audio level when voice mode is active
+  // Sync audio level when voice mode is active; also notify parent
   useEffect(() => {
+    onListeningChange?.(showVoice);
     if (!showVoice) return;
     startMic();
     let raf = 0;
@@ -73,7 +77,7 @@ export default function AgenticChat({ initialQuery, onStepComplete, currentStep 
       cancelAnimationFrame(raf);
       stopMic();
     };
-  }, [showVoice, startMic, stopMic, levelRef]);
+  }, [showVoice, startMic, stopMic, levelRef, onListeningChange]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -257,23 +261,25 @@ export default function AgenticChat({ initialQuery, onStepComplete, currentStep 
               exit={{ opacity: 0, scale: 0.9 }}
               className="flex items-center justify-center gap-2"
             >
-              <div className="flex-1 flex items-center justify-center h-10 rounded-xl bg-secondary/60 border border-border/50 overflow-hidden">
-                <div className="w-[40px] h-[40px] -my-4 mt-[-12px] pointer-events-auto">
-                  <Orb
-                    size={0.4 + audioLevel * 0.15}
-                    animationSpeedBase={1 + audioLevel * 3}
-                    animationSpeedHue={1 + audioLevel * 2}
-                    hueRotation={120 + audioLevel * 180}
-                    mainOrbHueAnimation={true}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground ml-1">Listening...</span>
+              {/* Waveform replaces the Orb */}
+              <div className="flex-1 flex flex-col items-center justify-center h-12 rounded-xl bg-secondary/60 border border-border/50 overflow-hidden px-3 gap-0.5">
+                <LiveWaveform
+                  active={true}
+                  processing={false}
+                  height={36}
+                  barWidth={3}
+                  barGap={2}
+                  mode="static"
+                  fadeEdges={true}
+                  barColor="primary"
+                />
               </div>
               <Button
                 size="icon"
                 variant="outline"
                 onClick={() => setShowVoice(false)}
                 className="rounded-xl h-10 w-10 shrink-0 border-border/50 text-muted-foreground hover:text-primary"
+                title="Switch to keyboard"
               >
                 <Keyboard className="h-4 w-4" />
               </Button>
@@ -289,14 +295,16 @@ export default function AgenticChat({ initialQuery, onStepComplete, currentStep 
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder="Type your answer..."
+                placeholder="Type your answer or switch to voice…"
                 className="flex-1 bg-secondary/60 backdrop-blur-sm border border-border/50 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring focus:bg-secondary/80 transition-colors"
+                autoFocus
               />
               <Button
                 size="icon"
                 variant="outline"
                 onClick={() => setShowVoice(true)}
                 className="rounded-xl h-10 w-10 shrink-0 border-border/50 text-muted-foreground hover:text-primary hover:border-primary/30"
+                title="Switch to voice"
               >
                 <Mic className="h-4 w-4" />
               </Button>

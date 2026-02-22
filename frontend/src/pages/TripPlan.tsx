@@ -18,14 +18,13 @@ export default function TripPlan() {
   const [planningComplete, setPlanningComplete] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
   const [aiEditStep, setAiEditStep] = useState(0);
+  const [listening, setListening] = useState(true); // voice mode is default
 
   const handleStepComplete = (step: number, answer: string) => {
     const nextStep = step + 1;
     setCurrentStep(nextStep);
-    if (nextStep >= TOTAL_STEPS) {
-      // Transition to completed view after animations finish
-      setTimeout(() => setPlanningComplete(true), 5000);
-    }
+    // planningComplete is now triggered by onAllDone from ProcessVisualization
+    // once the last stage animation finishes by itself
   };
 
   // Completed view
@@ -61,9 +60,8 @@ export default function TripPlan() {
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
               <div
                 key={i}
-                className={`h-1.5 w-6 rounded-full transition-colors duration-300 ${
-                  i < aiEditStep ? "bg-primary" : i === aiEditStep ? "bg-primary/40" : "bg-secondary"
-                }`}
+                className={`h-1.5 w-6 rounded-full transition-colors duration-300 ${i < aiEditStep ? "bg-primary" : i === aiEditStep ? "bg-primary/40" : "bg-secondary"
+                  }`}
               />
             ))}
           </div>
@@ -75,7 +73,7 @@ export default function TripPlan() {
           </div>
           {/* Middle — Process Visualization */}
           <div className="flex-1 min-w-[280px] min-h-0 overflow-hidden border-l border-border">
-            <ProcessVisualization currentStep={aiEditStep} totalSteps={TOTAL_STEPS} />
+            <ProcessVisualization currentStep={aiEditStep} totalSteps={TOTAL_STEPS} listening={listening} />
           </div>
           {/* Right — AI Chat */}
           <div className="w-[370px] shrink-0 flex flex-col min-h-0 relative">
@@ -83,6 +81,7 @@ export default function TripPlan() {
               initialQuery={query}
               onStepComplete={(step, answer) => setAiEditStep(step + 1)}
               currentStep={aiEditStep}
+              onListeningChange={setListening}
             />
           </div>
         </div>
@@ -104,9 +103,8 @@ export default function TripPlan() {
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
             <div
               key={i}
-              className={`h-1.5 w-6 rounded-full transition-colors duration-300 ${
-                i < currentStep ? "bg-primary" : i === currentStep ? "bg-primary/40" : "bg-secondary"
-              }`}
+              className={`h-1.5 w-6 rounded-full transition-colors duration-300 ${i < currentStep ? "bg-primary" : i === currentStep ? "bg-primary/40" : "bg-secondary"
+                }`}
             />
           ))}
         </div>
@@ -117,10 +115,15 @@ export default function TripPlan() {
           <LiveItinerary currentStep={currentStep} totalSteps={TOTAL_STEPS} destination={query} />
         </div>
         <div className="flex-1 min-w-[280px] min-h-0 overflow-hidden border-l border-border">
-          <ProcessVisualization currentStep={currentStep} totalSteps={TOTAL_STEPS} />
+          <ProcessVisualization
+            currentStep={currentStep}
+            totalSteps={TOTAL_STEPS}
+            listening={listening}
+            onAllDone={() => setPlanningComplete(true)}
+          />
         </div>
         <div className="w-[370px] shrink-0 flex flex-col min-h-0 relative">
-          <AgenticChat initialQuery={query} onStepComplete={handleStepComplete} currentStep={currentStep} />
+          <AgenticChat initialQuery={query} onStepComplete={handleStepComplete} currentStep={currentStep} onListeningChange={setListening} />
         </div>
       </div>
     </div>

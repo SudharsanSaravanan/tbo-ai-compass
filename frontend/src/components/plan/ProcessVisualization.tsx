@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Cloud, CalendarCheck, Video, ShieldCheck, Heart, CheckCircle2 } from "lucide-react";
+import { Cloud, CalendarCheck, Video, ShieldCheck, Heart } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { cn } from "@/lib/utils";
+import { LiveWaveform } from "@/components/ui/live-waveform";
 
 interface ProcessVisualizationProps {
   currentStep: number;
   totalSteps: number;
+  /** Whether the mic is actively listening (drives waveform in waiting state) */
+  listening?: boolean;
+  /** Whether AI is processing input (drives processing waveform) */
+  aiProcessing?: boolean;
+  /** Called after the last stage animation finishes so parent can transition */
+  onAllDone?: () => void;
 }
 
 interface ProcessStage {
@@ -60,13 +67,14 @@ const STAGES: ProcessStage[] = [
     id: "match",
     emoji: "💜",
     icon: <Heart className="h-6 w-6" />,
+    lottieUrl: "https://lottie.host/d76bf6ce-86f7-4bab-9b62-d3ed537bedd5/BHCABa46SG.lottie",
     title: "Personalizing",
     subtitle: "Matching experiences to your style",
     details: ["Analyzing preferences...", "Ranking activities...", "Building your perfect day..."],
   },
 ];
 
-export default function ProcessVisualization({ currentStep, totalSteps }: ProcessVisualizationProps) {
+export default function ProcessVisualization({ currentStep, totalSteps, listening = false, aiProcessing = false, onAllDone }: ProcessVisualizationProps) {
   const [activeStage, setActiveStage] = useState(-1);
   const [detailIndex, setDetailIndex] = useState(0);
   const [stageDone, setStageDone] = useState(false);
@@ -82,25 +90,8 @@ export default function ProcessVisualization({ currentStep, totalSteps }: Proces
     }
   }, [currentStep]);
 
-  // Complete all stages when planning done
-  useEffect(() => {
-    if (currentStep >= totalSteps) {
-      let stageIdx = 0;
-      const runStages = () => {
-        if (stageIdx >= STAGES.length) return;
-        setStageDone(false);
-        setDetailIndex(0);
-        setActiveStage(stageIdx);
-        const idx = stageIdx;
-        setTimeout(() => {
-          setStageDone(true);
-          stageIdx++;
-          setTimeout(runStages, 400);
-        }, 1500);
-      };
-      runStages();
-    }
-  }, [currentStep, totalSteps]);
+  // Remove the old "complete all stages" batch effect — stages now run one-by-one
+  // as the user answers each question (driven by currentStep above).
 
   // Cycle through detail text for active stage
   useEffect(() => {
@@ -112,10 +103,16 @@ export default function ProcessVisualization({ currentStep, totalSteps }: Proces
     return () => clearInterval(interval);
   }, [activeStage, stageDone]);
 
-  // Mark stage done after delay (during normal flow)
+  // Mark stage done after 4 s; if it’s the last stage call onAllDone
   useEffect(() => {
-    if (activeStage < 0 || currentStep >= totalSteps) return;
-    const timer = setTimeout(() => setStageDone(true), 4000);
+    if (activeStage < 0) return;
+    const timer = setTimeout(() => {
+      setStageDone(true);
+      if (activeStage === STAGES.length - 1) {
+        // brief pause so the user sees the waveform return before transitioning
+        setTimeout(() => onAllDone?.(), 800);
+      }
+    }, 4000);
     return () => clearTimeout(timer);
   }, [activeStage]);
 
@@ -125,49 +122,59 @@ export default function ProcessVisualization({ currentStep, totalSteps }: Proces
   return (
     <div className="flex flex-col h-full items-center justify-center px-8 py-8 overflow-hidden relative">
 
-      {/* Waiting state */}
-      {activeStage < 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center relative z-10 flex flex-col items-center"
-        >
-          <div className="w-[146px] h-[146px] mb-4">
-            <DotLottieReact
-              // src="https://lottie.host/d76bf6ce-86f7-4bab-9b62-d3ed537bedd5/BHCABa46SG.lottie"
-              src="https://lottie.host/0179381c-805f-4b37-be14-26b3552c13bf/LuPNLj4CgU.lottie"
-              loop
-              autoplay
-            />
-          </div>
-          <p className="text-sm font-medium text-foreground mb-1">Waiting for your input</p>
-          <p className="text-xs text-muted-foreground">Answer a few questions to start planning...</p>
-        </motion.div>
-      )}
-
-      {/* Active process visualization */}
-      <AnimatePresence mode="wait">
-        {stage && (
+      {/* Waiting state OR between-stage waveform — both show full waveform */}
+      <AnimatePresence>
+        {(activeStage < 0 || (stageDone && activeStage < STAGES.length - 1)) && (
           <motion.div
-            key={stage.id}
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            key={activeStage < 0 ? "waiting" : `done-${activeStage}`}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.45 }}
+            className="text-center relative z-10 flex flex-col items-center w-full px-6"
+          >
+            {/* Half-width reactive waveform — opens mic itself via active=true */}
+            <div className="w-1/2 mx-auto mb-5">
+              <LiveWaveform
+                active={true}
+                height={80}
+                barWidth={3}
+                barGap={2}
+                mode="static"
+                fadeEdges={true}
+                barColor="primary"
+              />
+            </div>
+
+            <motion.p
+              animate={{ opacity: [1, 0.45, 1] }}
+              transition={{ duration: 1.4, repeat: Infinity }}
+              className="text-sm font-medium text-foreground mb-1"
+            >
+              {stageDone ? "✓ Done — listening for next answer" : "Listening…"}
+            </motion.p>
+            <p className="text-xs text-muted-foreground">
+              {stageDone ? "Speak your next preference" : "Answer a few questions to start planning…"}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Active process visualization — only shown while stage is RUNNING */}
+      <AnimatePresence mode="wait">
+        {stage && !stageDone && (
+          <motion.div
+            key={`${stage.id}-running`}
+            initial={{ opacity: 0, scale: 0.85, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: -20 }}
-            transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+            exit={{ opacity: 0, scale: 0.85, y: -20 }}
+            transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
             className="text-center relative z-10 flex flex-col items-center"
           >
-            {/* Big emoji */}
+            {/* Lottie / emoji */}
             <motion.div
-              animate={
-                stageDone
-                  ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }
-                  : { y: [0, -12, 0], scale: [1, 1.05, 1] }
-              }
-              transition={{
-                duration: stageDone ? 0.5 : 3,
-                repeat: stageDone ? 0 : Infinity,
-                ease: "easeInOut",
-              }}
+              animate={{ y: [0, -10, 0], scale: [1, 1.04, 1] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
               className="relative mb-6"
             >
               {stage.lottieUrl ? (
@@ -177,56 +184,44 @@ export default function ProcessVisualization({ currentStep, totalSteps }: Proces
               ) : (
                 <span className="text-7xl md:text-8xl block">{stage.emoji}</span>
               )}
-
-
-              {/* Done checkmark overlay */}
-              {/* {stageDone && (
-                <motion.div
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-success flex items-center justify-center shadow-lg"
-                >
-                  <CheckCircle2 className="h-5 w-5 text-success-foreground" />
-                </motion.div>
-              )} */}
             </motion.div>
 
             {/* Title */}
-            <h2 className="text-lg font-heading font-semibold text-foreground mb-1">
-              {stageDone ? `${stage.title} ✓` : stage.title}
-            </h2>
+            <h2 className="text-lg font-heading font-semibold text-foreground mb-1">{stage.title}</h2>
             <p className="text-xs text-muted-foreground mb-4">{stage.subtitle}</p>
 
             {/* Cycling detail text */}
-            {!stageDone && (
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={detailIndex}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/80 border border-border/50"
-                >
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                    className="h-3.5 w-3.5 border-2 border-primary/30 border-t-primary rounded-full"
-                  />
-                  <span className="text-xs text-muted-foreground">{stage.details[detailIndex]}</span>
-                </motion.div>
-              </AnimatePresence>
-            )}
-
-            {stageDone && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-xs text-success font-medium"
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={detailIndex}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3 }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/80 border border-border/50"
               >
-                Complete — moving to next step
-              </motion.p>
-            )}
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  className="h-3.5 w-3.5 border-2 border-primary/30 border-t-primary rounded-full"
+                />
+                <span className="text-xs text-muted-foreground">{stage.details[detailIndex]}</span>
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Processing waveform strip beneath detail text */}
+            {/* <div className="w-full max-w-[200px] mt-4">
+              <LiveWaveform
+                active={false}
+                processing={true}
+                height={36}
+                barWidth={3}
+                barGap={2}
+                mode="static"
+                fadeEdges={true}
+                barColor="primary"
+              />
+            </div> */}
           </motion.div>
         )}
       </AnimatePresence>

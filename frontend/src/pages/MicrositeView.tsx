@@ -2,7 +2,8 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   MapPin, Utensils, Camera, Bus, Clock, Youtube, Cloud,
-  ChevronDown, ChevronUp, Compass, CheckSquare
+  ChevronDown, ChevronUp, Compass, CheckSquare,
+  Sun, CloudSun, CloudRain, CloudSnow, Wind, Cloudy
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -51,15 +52,47 @@ const YOUTUBE_VIDEOS = [
   { id: "4", title: "Budget Travel — Complete Guide", thumbnail: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=320&h=180&fit=crop", channel: "Kara & Nate", views: "567K" },
 ];
 
-const WEATHER_MOCK = [
-  { day: "Mon", icon: "☀️", high: 32, low: 24 },
-  { day: "Tue", icon: "⛅", high: 30, low: 23 },
-  { day: "Wed", icon: "🌤️", high: 31, low: 24 },
-  { day: "Thu", icon: "🌧️", high: 28, low: 22 },
-  { day: "Fri", icon: "☀️", high: 33, low: 25 },
-  { day: "Sat", icon: "⛅", high: 29, low: 23 },
-  { day: "Sun", icon: "☀️", high: 31, low: 24 },
+type WeatherCondition = "sunny" | "partly-cloudy" | "cloudy" | "rainy" | "snowy" | "windy";
+
+const WEATHER_ICON: Record<WeatherCondition, JSX.Element> = {
+  "sunny": <Sun className="h-5 w-5 text-yellow-500" />,
+  "partly-cloudy": <CloudSun className="h-5 w-5 text-yellow-400" />,
+  "cloudy": <Cloudy className="h-5 w-5 text-slate-400" />,
+  "rainy": <CloudRain className="h-5 w-5 text-blue-400" />,
+  "snowy": <CloudSnow className="h-5 w-5 text-sky-300" />,
+  "windy": <Wind className="h-5 w-5 text-teal-400" />,
+};
+
+const WEATHER_MOCK: { condition: WeatherCondition; high: number; low: number }[] = [
+  { condition: "sunny", high: 32, low: 24 },
+  { condition: "partly-cloudy", high: 30, low: 23 },
+  { condition: "partly-cloudy", high: 31, low: 24 },
+  { condition: "rainy", high: 28, low: 22 },
+  { condition: "sunny", high: 33, low: 25 },
+  { condition: "cloudy", high: 29, low: 23 },
+  { condition: "sunny", high: 31, low: 24 },
 ];
+
+function getWeatherDates() {
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return WEATHER_MOCK.map((w, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1 + i);
+    return {
+      ...w,
+      dayName: DAY_NAMES[d.getDay()],
+      dateLabel: `${d.getDate()} ${d.toLocaleString("default", { month: "short" })}`,
+    };
+  });
+}
+
+// Returns "Mon, 23 Feb" for a given itinerary day index (0-based, starting from tomorrow)
+function getDayDate(dayIdx: number) {
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const d = new Date();
+  d.setDate(d.getDate() + 1 + dayIdx);
+  return `${DAY_NAMES[d.getDay()]}, ${d.getDate()} ${d.toLocaleString("default", { month: "short" })}`;
+}
 
 const typeIcon = {
   place: <MapPin className="h-3.5 w-3.5" />,
@@ -124,21 +157,35 @@ export default function MicrositeView() {
           </div>
 
           {/* Weather strip */}
-          <div className="mb-5 p-4 rounded-xl border border-border bg-card">
-            <div className="flex items-center gap-2 mb-3">
-              <Cloud className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold text-foreground">Weather Forecast</span>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-5 rounded-xl border border-border bg-card overflow-hidden"
+          >
+            {/* Header: title + location */}
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <Cloud className="h-4 w-4 text-primary" />
+                <span className="text-sm font-semibold text-foreground">Weather Forecast</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                <span>{destination}</span>
+              </div>
             </div>
-            <div className="grid grid-cols-7 gap-2">
-              {WEATHER_MOCK.map((w, i) => (
-                <div key={i} className="text-center p-2 rounded-lg bg-accent/30 border border-border/50">
-                  <p className="text-[10px] text-muted-foreground">{w.day}</p>
-                  <p className="text-lg my-0.5">{w.icon}</p>
-                  <p className="text-[10px] font-semibold">{w.high}°/{w.low}°</p>
+            {/* 7-day grid */}
+            <div className="grid grid-cols-7 gap-2 p-4">
+              {getWeatherDates().map((w, i) => (
+                <div key={i} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-accent/30 border border-border/50">
+                  <p className="text-[10px] font-semibold text-foreground">{w.dayName}</p>
+                  <p className="text-[9px] text-muted-foreground">{w.dateLabel}</p>
+                  <div className="my-1">{WEATHER_ICON[w.condition]}</div>
+                  <p className="text-[10px] font-bold text-foreground">{w.high}°</p>
+                  <p className="text-[9px] text-muted-foreground">{w.low}°</p>
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
 
           {/* Checklist (read-only, always visible) */}
           <div className="mb-5">
@@ -148,8 +195,11 @@ export default function MicrositeView() {
           {/* Itinerary days */}
           <div className="space-y-3">
             {FULL_ITINERARY.map((day, dayIdx) => (
-              <div
+              <motion.div
                 key={day.day}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: dayIdx * 0.15 }}
                 className="border border-border rounded-xl overflow-hidden bg-card"
               >
                 <button
@@ -159,6 +209,9 @@ export default function MicrositeView() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                       Day {day.day}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-md">
+                      {getDayDate(dayIdx)}
                     </span>
                     <span className="text-sm font-medium text-foreground">{day.title}</span>
                     <span className="text-xs text-muted-foreground">• {day.items.length} activities</span>
@@ -195,7 +248,7 @@ export default function MicrositeView() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
