@@ -65,12 +65,16 @@ const typeIcon = {
 
 const typeColor = {
   place: "text-primary bg-primary/10",
-  food: "text-warning bg-warning/10",
+  food: "text-orange-600 bg-orange-500/10 dark:text-orange-400 dark:bg-orange-500/15",
   transport: "text-muted-foreground bg-secondary",
-  experience: "text-success bg-success/10",
+  experience: "text-emerald-600 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-500/15",
 };
 
-export default function LiveItinerary({ currentStep, totalSteps, destination }: LiveItineraryProps) {
+export default function LiveItinerary({
+  currentStep,
+  totalSteps,
+  destination,
+}: LiveItineraryProps) {
   const [visibleDays, setVisibleDays] = useState(0);
   const [version, setVersion] = useState(0);
 
@@ -111,78 +115,93 @@ export default function LiveItinerary({ currentStep, totalSteps, destination }: 
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        {/* Destination header */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mb-4"
-        >
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Destination</p>
-          <p className="text-base font-heading font-semibold text-foreground">{destination || "Planning..."}</p>
-        </motion.div>
+      <div className="flex-1 overflow-y-auto px-4 py-5">
 
-        {/* Skeleton state */}
+        {/* Skeleton Loading State */}
         {showSkeleton && (
-          <div className="space-y-4">
-            <div className="text-xs text-muted-foreground text-center py-6">
-              Answer a few more questions to start building your itinerary...
+          <div className="space-y-6 py-2">
+            <div className="text-xs text-muted-foreground text-center py-10 italic">
+              Answer a few more questions to generate your personalized itinerary...
             </div>
+
             {[1, 2, 3].map((i) => (
-              <div key={i} className="space-y-2 opacity-30">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-12 w-full rounded-lg" />
-                <Skeleton className="h-12 w-full rounded-lg" />
-                <Skeleton className="h-12 w-3/4 rounded-lg" />
+              <div key={i} className="space-y-3">
+                {/* Day header skeleton */}
+                <div className="flex items-center gap-2.5">
+                  <div className="h-5 w-16 bg-gray-300/50 rounded-full" />
+                  <div className="h-4 w-36 bg-gray-300/40 rounded" />
+                </div>
+
+                {/* Items skeleton */}
+                <div className="space-y-3 pl-2 border-l-2 border-border/40 ml-1">
+                  <div className="h-11 w-full bg-gray-300/50 rounded-lg" />
+                  <div className="h-11 w-full bg-gray-300/50 rounded-lg" />
+                  <div className="h-11 w-5/6 bg-gray-300/50 rounded-lg" />
+                  <div className="h-11 w-3/4 bg-gray-300/45 rounded-lg" />
+                </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Itinerary days */}
-        <AnimatePresence mode="popLayout">
-          {MOCK_ITINERARY.slice(0, visibleDays).map((day, dayIndex) => (
-            <motion.div
-              key={day.day}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: dayIndex * 0.2 }}
-              className="mb-6"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  Day {day.day}
-                </span>
-                <span className="text-xs font-medium text-foreground">{day.title}</span>
-              </div>
+        {/* Real Itinerary Content */}
+        {!showSkeleton && (
+          <AnimatePresence mode="popLayout">
+            {MOCK_ITINERARY.slice(0, visibleDays).map((day, dayIndex) => (
+              <motion.div
+                key={day.day}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.5, delay: dayIndex * 0.15 }}
+                className="mb-7"
+              >
+                <div className="flex items-center gap-2.5 mb-3">
+                  <span className="text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
+                    Day {day.day}
+                  </span>
+                  <span className="text-sm font-medium text-foreground">{day.title}</span>
+                </div>
 
-              <div className="space-y-2 pl-2 border-l-2 border-border ml-1">
-                {day.items.map((item, itemIndex) => (
-                  <motion.div
-                    key={itemIndex}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: dayIndex * 0.2 + itemIndex * 0.1 + 0.3 }}
-                    className="flex items-start gap-2.5 pl-3 py-1.5"
-                  >
-                    <div className={cn("h-6 w-6 rounded-md flex items-center justify-center shrink-0 mt-0.5", typeColor[item.type])}>
-                      {typeIcon[item.type]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground font-medium">{item.time}</span>
+                <div className="space-y-2 pl-2 border-l-2 border-border/60 ml-1">
+                  {day.items.map((item, itemIndex) => (
+                    <motion.div
+                      key={itemIndex}
+                      initial={{ opacity: 0, x: -12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{
+                        delay: dayIndex * 0.15 + itemIndex * 0.08 + 0.3,
+                        duration: 0.4,
+                      }}
+                      className="flex items-start gap-3 pl-3 py-2 rounded-lg hover:bg-accent/40 transition-colors"
+                    >
+                      <div
+                        className={cn(
+                          "h-7 w-7 rounded-md flex items-center justify-center shrink-0 mt-0.5",
+                          typeColor[item.type]
+                        )}
+                      >
+                        {typeIcon[item.type]}
                       </div>
-                      <p className="text-sm text-foreground">{item.title}</p>
-                      {item.note && (
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{item.note}</p>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground font-medium">
+                            {item.time}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-foreground">{item.title}</p>
+                        {item.note && (
+                          <p className="text-xs text-muted-foreground mt-1">{item.note}</p>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        )}
       </div>
     </div>
   );
