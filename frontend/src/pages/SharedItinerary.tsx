@@ -1,0 +1,340 @@
+import { useState } from "react";
+import { useParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  MapPin, Utensils, Camera, Bus, Clock, Youtube, Cloud,
+  ChevronDown, ChevronUp, Copy, Check, MessageSquare, Send, X
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import MapCard from "@/components/MapCard";
+import TripChecklist from "@/components/TripChecklist";
+import tboLogo from "@/assets/tbo-logo.png";
+
+const FULL_ITINERARY = [
+  {
+    day: 1, title: "Arrival & First Impressions",
+    items: [
+      { time: "10:00 AM", title: "Arrive & hotel check-in", type: "transport" as const, note: "Airport transfer included" },
+      { time: "12:30 PM", title: "Local welcome lunch", type: "food" as const, note: "Traditional cuisine" },
+      { time: "3:00 PM", title: "Walking tour of old town", type: "place" as const, note: "Guided heritage walk" },
+      { time: "7:00 PM", title: "Sunset viewpoint visit", type: "experience" as const, note: "Best sunset spot in the city" },
+    ],
+  },
+  {
+    day: 2, title: "Culture & Exploration",
+    items: [
+      { time: "8:30 AM", title: "Breakfast at local café", type: "food" as const },
+      { time: "10:00 AM", title: "Museum & heritage site", type: "place" as const, note: "UNESCO World Heritage" },
+      { time: "1:00 PM", title: "Street food tour", type: "food" as const, note: "Must-try local dishes" },
+      { time: "4:00 PM", title: "Market & shopping district", type: "experience" as const },
+      { time: "7:30 PM", title: "Cultural performance", type: "experience" as const, note: "Traditional dance show" },
+    ],
+  },
+  {
+    day: 3, title: "Adventure Day",
+    items: [
+      { time: "7:00 AM", title: "Sunrise trek / nature hike", type: "experience" as const, note: "Moderate difficulty, 3hr" },
+      { time: "12:00 PM", title: "Scenic lunch spot", type: "food" as const },
+      { time: "2:30 PM", title: "Water activity / adventure sport", type: "experience" as const },
+      { time: "6:00 PM", title: "Farewell dinner", type: "food" as const, note: "Fine dining experience" },
+    ],
+  },
+];
+
+const YOUTUBE_VIDEOS = [
+  { id: "1", title: "Top 10 Things to Do — Travel Guide", thumbnail: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=320&h=180&fit=crop", channel: "Travel Insider", views: "1.2M" },
+  { id: "2", title: "Street Food You MUST Try", thumbnail: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=320&h=180&fit=crop", channel: "Food Ranger", views: "890K" },
+  { id: "3", title: "Hidden Gems & Secret Spots", thumbnail: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=320&h=180&fit=crop", channel: "Lost LeBlanc", views: "2.1M" },
+  { id: "4", title: "Budget Travel — Complete Guide", thumbnail: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=320&h=180&fit=crop", channel: "Kara & Nate", views: "567K" },
+];
+
+const WEATHER_MOCK = [
+  { day: "Mon", icon: "☀️", high: 32, low: 24 },
+  { day: "Tue", icon: "⛅", high: 30, low: 23 },
+  { day: "Wed", icon: "🌤️", high: 31, low: 24 },
+  { day: "Thu", icon: "🌧️", high: 28, low: 22 },
+  { day: "Fri", icon: "☀️", high: 33, low: 25 },
+  { day: "Sat", icon: "⛅", high: 29, low: 23 },
+  { day: "Sun", icon: "☀️", high: 31, low: 24 },
+];
+
+const typeIcon = {
+  place: <MapPin className="h-3.5 w-3.5" />,
+  food: <Utensils className="h-3.5 w-3.5" />,
+  transport: <Bus className="h-3.5 w-3.5" />,
+  experience: <Camera className="h-3.5 w-3.5" />,
+};
+
+const typeColor = {
+  place: "text-primary bg-primary/10",
+  food: "text-warning bg-warning/10",
+  transport: "text-muted-foreground bg-secondary",
+  experience: "text-success bg-success/10",
+};
+
+function getTripDates() {
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
+  const dates: Date[] = [];
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+}
+
+export default function SharedItinerary() {
+  const { destination: destParam } = useParams();
+  const destination = decodeURIComponent(destParam || "Bali");
+  const [collapsedDays, setCollapsedDays] = useState<Set<number>>(new Set());
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [requestText, setRequestText] = useState("");
+  const [requestSent, setRequestSent] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const tripDates = getTripDates();
+
+  const toggleDay = (dayIdx: number) => {
+    setCollapsedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(dayIdx)) next.delete(dayIdx);
+      else next.add(dayIdx);
+      return next;
+    });
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSendRequest = () => {
+    if (!requestText.trim()) return;
+    setRequestSent(true);
+    setRequestText("");
+    setTimeout(() => {
+      setShowRequestForm(false);
+      setRequestSent(false);
+    }, 3000);
+  };
+
+  return (
+    <div className="h-screen flex flex-col bg-background">
+      {/* Top bar */}
+      <div className="h-11 border-b border-border flex items-center px-4 gap-3 shrink-0 bg-card/50">
+        <img src={tboLogo} alt="TBO" className="h-7" />
+        <div className="h-4 w-px bg-border" />
+        <p className="text-sm text-foreground font-medium truncate">
+          {destination} — Shared Itinerary
+        </p>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg" onClick={handleCopyLink}>
+            {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+            {copied ? "Copied!" : "Copy Link"}
+          </Button>
+          <Button
+            size="sm"
+            variant={showRequestForm ? "secondary" : "default"}
+            className="h-7 text-xs rounded-lg"
+            onClick={() => setShowRequestForm(!showRequestForm)}
+          >
+            <MessageSquare className="h-3 w-3 mr-1" />
+            Request Changes
+          </Button>
+        </div>
+      </div>
+
+      {/* Request Changes Form (slides down) */}
+      <AnimatePresence>
+        {showRequestForm && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-b border-border bg-card"
+          >
+            <div className="px-6 py-4 max-w-xl mx-auto">
+              {requestSent ? (
+                <div className="text-center py-3">
+                  <Check className="h-6 w-6 text-success mx-auto mb-1.5" />
+                  <p className="text-sm font-semibold text-foreground">Request Sent!</p>
+                  <p className="text-xs text-muted-foreground">The trip planner will review your changes.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold text-foreground">Request Changes</h3>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowRequestForm(false)}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <textarea
+                    value={requestText}
+                    onChange={(e) => setRequestText(e.target.value)}
+                    placeholder="e.g., Can we add an extra day for beach relaxation?..."
+                    className="w-full bg-secondary/60 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring resize-none h-20 mb-2"
+                  />
+                  <Button onClick={handleSendRequest} disabled={!requestText.trim()} size="sm" className="rounded-lg w-full">
+                    <Send className="h-3.5 w-3.5 mr-1.5" /> Send Request
+                  </Button>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 3-panel layout matching /plan completed view */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left — Itinerary + Weather + Checklist */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 border-r border-border">
+          <div className="mb-5">
+            <h2 className="text-xl font-heading font-bold text-foreground">{destination} Itinerary</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">3 Days • Personalized for you</p>
+          </div>
+
+          {/* Weather strip */}
+          <div className="mb-5 p-4 rounded-xl border border-border bg-card">
+            <div className="flex items-center gap-2 mb-3">
+              <Cloud className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">Weather Forecast</span>
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {WEATHER_MOCK.map((w, i) => (
+                <div key={i} className="text-center p-2 rounded-lg bg-accent/30 border border-border/50">
+                  <p className="text-[10px] text-muted-foreground">{w.day}</p>
+                  <p className="text-lg my-0.5">{w.icon}</p>
+                  <p className="text-[10px] font-semibold">{w.high}°/{w.low}°</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Itinerary days */}
+          <div className="space-y-3">
+            {FULL_ITINERARY.map((day, dayIdx) => (
+              <div key={day.day} className="border border-border rounded-xl overflow-hidden bg-card">
+                <button
+                  onClick={() => toggleDay(dayIdx)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-accent/30 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                      Day {day.day}
+                    </span>
+                    <span className="text-sm font-medium text-foreground">{day.title}</span>
+                    <span className="text-xs text-muted-foreground">• {day.items.length} activities</span>
+                  </div>
+                  {collapsedDays.has(dayIdx) ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {!collapsedDays.has(dayIdx) && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="border-t border-border"
+                    >
+                      <div className="px-4 py-2 space-y-1">
+                        {day.items.map((item, itemIdx) => (
+                          <div key={itemIdx} className="flex items-center gap-2.5 py-2">
+                            <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shrink-0", typeColor[item.type])}>
+                              {typeIcon[item.type]}
+                            </div>
+                            <span className="text-[10px] text-muted-foreground font-mono w-16 shrink-0">{item.time}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-foreground">{item.title}</p>
+                              {item.note && <p className="text-[10px] text-muted-foreground">{item.note}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
+
+          {/* Checklist (read-only) */}
+          <div className="mt-5">
+            <TripChecklist />
+          </div>
+        </div>
+
+        {/* Middle — Calendar + YouTube */}
+        <div className="w-[320px] shrink-0 overflow-y-auto border-r border-border bg-card/30 px-4 py-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Trip Dates</span>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-1">
+            <Calendar
+              mode="multiple"
+              selected={tripDates}
+              className="p-2 pointer-events-auto"
+              modifiersClassNames={{
+                selected: "bg-primary text-primary-foreground rounded-md",
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-2 mt-2 px-1">
+            <div className="h-3 w-3 rounded-sm bg-primary" />
+            <span className="text-[10px] text-muted-foreground">Trip days</span>
+          </div>
+
+          {/* YouTube Videos */}
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Youtube className="h-4 w-4 text-destructive" />
+              <span className="text-sm font-semibold text-foreground">Related Videos</span>
+            </div>
+            <div className="space-y-3">
+              {YOUTUBE_VIDEOS.map((v) => (
+                <div key={v.id} className="group cursor-pointer rounded-xl overflow-hidden border border-border bg-card hover:shadow-md transition-shadow">
+                  <div className="relative aspect-video">
+                    <img src={v.thumbnail} alt={v.title} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-full bg-destructive/90 flex items-center justify-center">
+                        <div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[9px] border-l-white border-b-[5px] border-b-transparent ml-0.5" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-2.5">
+                    <p className="text-xs font-medium text-foreground line-clamp-2">{v.title}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{v.channel} • {v.views} views</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right — Map */}
+        <div className="w-[400px] shrink-0 flex flex-col bg-card/30">
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Trip Map</span>
+          </div>
+          <div className="flex-1 relative">
+            <MapCard className="w-full h-full overflow-hidden" />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="h-10 border-t border-border flex items-center justify-center shrink-0 bg-card/50">
+        <span className="text-xs text-muted-foreground">Powered by TBO AI Compass</span>
+      </div>
+    </div>
+  );
+}
