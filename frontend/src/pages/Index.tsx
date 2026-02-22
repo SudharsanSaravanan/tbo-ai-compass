@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Calendar as CalendarIcon, Users, Clock, Search, ChevronDown } from "lucide-react";
+import { MapPin, Calendar as CalendarIcon, Users, Clock, Search, ChevronDown, Navigation } from "lucide-react";
 import { format } from "date-fns";
 import { ScaleLoader } from "react-spinners";
+import { motion, AnimatePresence } from "framer-motion";
 import heroImage from "@/assets/hero-travel.png";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -27,6 +28,7 @@ let siteLoaded = false;
 
 export default function Index() {
   const [query, setQuery] = useState("");
+  const [origin, setOrigin] = useState("");
   const [showOrb, setShowOrb] = useState(false);
   const [travelDate, setTravelDate] = useState<Date>();
   const [adults, setAdults] = useState(2);
@@ -47,7 +49,8 @@ export default function Index() {
 
   const handleSearch = () => {
     const q = query.trim() || "Trip";
-    navigate("/plan", { state: { query: q } });
+    const o = origin.trim();
+    navigate("/plan", { state: { query: q, origin: o, date: travelDate, adults, children } });
   };
 
   if (loading) {
@@ -110,7 +113,18 @@ export default function Index() {
               </p>
 
               {/* Search Bar – TourRadar / modern style */}
-              <div className="bg-white/95 backdrop-blur-md rounded-full shadow-2xl p-1.5 sm:p-2 flex items-center w-full max-w-4xl">
+              <div className="bg-white/95 backdrop-blur-md rounded-full shadow-2xl p-1.5 sm:p-2 flex items-center w-full max-w-5xl">
+                {/* Origin Input */}
+                <div className="flex-1 flex items-center gap-3 sm:gap-4 px-5 sm:px-6 py-3 sm:py-4 border-r border-gray-200">
+                  <Navigation className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground shrink-0" />
+                  <input
+                    value={origin}
+                    onChange={(e) => setOrigin(e.target.value)}
+                    placeholder="From where?"
+                    className="w-full bg-transparent text-base sm:text-lg text-gray-900 placeholder:text-gray-500 outline-none"
+                  />
+                </div>
+
                 <div className="flex-1 flex items-center gap-3 sm:gap-4 px-5 sm:px-6 py-3 sm:py-4 border-r border-gray-200">
                   <MapPin className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground shrink-0" />
                   <input
@@ -118,7 +132,7 @@ export default function Index() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    placeholder="Where would you like to go?"
+                    placeholder="Your destination?"
                     className="w-full bg-transparent text-base sm:text-lg text-gray-900 placeholder:text-gray-500 outline-none"
                   />
                 </div>
