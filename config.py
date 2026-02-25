@@ -36,7 +36,7 @@ MAX_RESULTS_PER_QUERY = 10
 # ============================================================================
 
 # Number of top videos to analyze deeply (fetch transcript + LLM score)
-TOP_N_FOR_ANALYSIS = 15
+TOP_N_FOR_ANALYSIS = 7
 
 # Minimum engagement score threshold (0.0 - 1.0)
 MIN_ENGAGEMENT_SCORE = 0.1
