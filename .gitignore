@@ -5,3 +5,6 @@ instructions.md
 __pycache__/
 *.txt
 !requirements.txt
+agent/.env
+reference-agent-setup/
+
