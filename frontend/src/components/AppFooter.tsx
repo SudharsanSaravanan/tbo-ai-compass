@@ -22,10 +22,9 @@ export default function AppFooter() {
           <div className="space-y-4">
             <h4 className="text-base font-semibold tracking-tight">Quick Links</h4>
             <nav className="flex flex-col gap-2 text-sm">
-              {["/", "/experiences", "/my-trips"].map((path) => {
+              {["/", "/my-trips"].map((path) => {
                 const labels = {
                   "/": "Home",
-                  "/experiences": "Experiences",
                   "/my-trips": "My Trips",
                 };
                 return (

@@ -10,7 +10,6 @@ import Index from "./pages/Index";
 import IntentPreview from "./pages/IntentPreview";
 import TripDashboard from "./pages/TripDashboard";
 import FoodDetails from "./pages/FoodDetails";
-import Experiences from "./pages/Experiences";
 import TripInfo from "./pages/TripInfo";
 import MicrositeCreate from "./pages/MicrositeCreate";
 import MicrositeView from "./pages/MicrositeView";
@@ -37,7 +36,6 @@ function AppLayout() {
           <Route path="/trip/:tripId" element={<TripDashboard />} />
           <Route path="/trip/:tripId/info" element={<TripInfo />} />
           <Route path="/food/:venueId" element={<FoodDetails />} />
-          <Route path="/experiences" element={<Experiences />} />
           <Route path="/microsite/create/:tripId" element={<MicrositeCreate />} />
           <Route path="/m/:slug" element={<MicrositeView />} />
           <Route path="/shared/:destination" element={<SharedItinerary />} />
