@@ -13,8 +13,7 @@ Adjust these parameters to customize pipeline behavior
 YOUTUBE_QUOTA_BUDGET = 1000  # Max quota units to use per run
 
 # Groq Model Selection
-GROQ_MODEL = "openai/gpt-oss-120b"  # Fast inference model
-# Alternative: "llama3-70b-8192", "mixtral-8x7b-32768"
+GROQ_MODEL = "llama-3.1-8b-instant"  # Fast, high-TPD Groq model for pipeline LLM calls
 
 
 # ============================================================================
@@ -69,7 +68,7 @@ ENGAGEMENT_RECENCY_WEIGHT = 0.20
 # ============================================================================
 
 # Maximum transcript words to send to LLM (shorter = more room for JSON response, fewer cutoffs)
-MAX_TRANSCRIPT_WORDS = 2000
+MAX_TRANSCRIPT_WORDS = 500  # Keep scoring payload under Groq free-tier TPM limit (~6k)
 
 # Take first available transcript (any language) - match test1.py behavior
 # Non-English transcripts are translated to English via Groq (TRANSLATION_MODEL_GROQ)

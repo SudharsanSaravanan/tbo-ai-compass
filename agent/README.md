@@ -2,6 +2,52 @@
 
 A basic voice agent implementation using LiveKit Agents with Groq plugins for Speech-to-Text (STT), Text-to-Speech (TTS), and Large Language Model (LLM) capabilities.
 
+## Integrated Travel Agent (travel_agent.py)
+
+The **integrated agent** is a full travel-planning voice flow that:
+
+- Asks questions in order: destination → dates/duration → budget → experience → travelers → optional reference (YouTube or blog URL).
+- If the user provides a **YouTube URL**: fetches transcript (same logic as project `test1.py`) and uses it as context.
+- If the user provides a **blog URL**: extracts content via Firecrawl (see project `firecrawl.md`) and uses it as context.
+- If the user has **no reference**: runs the project `youtube_pipeline.py` to discover top videos and transcripts for the route.
+- Updates the **itinerary** on the frontend (left panel) and pushes **agent + user transcripts** (right panel) via LiveKit data.
+
+### Layout
+
+- **Main entry**: `travel_agent.py` (like `new-sales.py` in reference setups).
+- **Tools** (helpers in `tools/`):
+  - `preferences.py` — structured trip preferences.
+  - `youtube_transcript.py` — single YouTube URL → transcript (test1 logic).
+  - `blog_extract.py` — Firecrawl scrape → markdown for context.
+  - `pipeline_runner.py` — runs `youtube_pipeline` and returns summary for the agent.
+  - `itinerary_state.py` — itinerary days/items, serialized for the frontend.
+
+### Run the integrated agent
+
+```bash
+cd agent
+python travel_agent.py dev   # or: python travel_agent.py start
+```
+
+### Token server (for frontend)
+
+So the React app can join the same room as the agent:
+
+```bash
+cd agent
+python token_server.py
+```
+
+Serves `GET /token?room=ROOM` and returns `{ "token", "room", "wsUrl" }`. Set `LIVEKIT_URL` in `.env` so `wsUrl` is returned.
+
+### Frontend
+
+- In **TripPlan**, click **Use voice agent** to connect to LiveKit.
+- Set in frontend `.env`: `VITE_TOKEN_API=http://localhost:8765` and optionally `VITE_LIVEKIT_WS=wss://...` (or rely on token server’s `wsUrl`).
+- Left panel: itinerary (updated from agent data).
+- Center: voice waveform; user can speak.
+- Right panel: agent and user transcript (from session events).
+
 ## Features
 
 - **Speech-to-Text**: Groq's Whisper model (`whisper-large-v3-turbo`)

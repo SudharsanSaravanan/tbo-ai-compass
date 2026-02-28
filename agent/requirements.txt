@@ -1,5 +1,6 @@
-# LiveKit Agent Core
+# LiveKit Agent Core + API (for token server)
 livekit-agents~=1.4.0
+livekit-api>=0.8.0
 
 # Groq Plugin for LiveKit (STT + LLM)
 livekit-plugins-groq~=1.4.0
@@ -9,3 +10,7 @@ livekit-plugins-cartesia~=1.4.0
 
 # Environment variables
 python-dotenv>=1.0.0
+
+# Optional for travel agent tools (blog extract, pipeline)
+firecrawl-py>=1.0.0
+youtube-transcript-api>=0.6.1
