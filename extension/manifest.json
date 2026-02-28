@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "TBO AI Compass – Travel Planner",
     "short_name": "TBO Compass",
-    "description": "Save YouTube travel videos to your TBO AI Compass travel plans instantly.",
+    "description": "Save YouTube travel videos and blog URLs to trip buckets in TBO AI Compass.",
     "version": "1.0.0",
     "icons": {
         "16": "icons/icon16.png",

@@ -821,3 +821,297 @@ body {
 .plans-panel {
     animation: fadeIn 0.2s ease;
 }
+
+/* ========== HEADER ACTIONS ========== */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.header-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(4px);
+    color: #fff;
+    cursor: pointer;
+    position: relative;
+    transition: background var(--transition), transform var(--transition);
+}
+
+.header-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.28);
+    transform: scale(1.06);
+}
+
+/* ========== TAB SWITCHER ========== */
+.tab-switcher {
+    display: flex;
+    gap: 6px;
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    padding: 3px;
+    margin-bottom: 2px;
+}
+
+.tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 10px;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+}
+
+.tab-btn.active {
+    background: #fff;
+    color: var(--primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.tab-btn:hover:not(.active) {
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.5);
+}
+
+/* ========== BLOG BADGE ========== */
+.blog-badge {
+    background: hsl(220, 80%, 97%);
+    color: hsl(220, 70%, 42%);
+    border-color: hsl(220, 70%, 85%);
+}
+
+/* ========== BLOG URL AUTO-DETECT ========== */
+.blog-url-autodetect {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--success);
+    font-weight: 500;
+    padding: 4px 8px;
+    background: var(--success-bg);
+    border-radius: var(--radius-sm);
+    border: 1px solid hsl(142, 71%, 80%);
+}
+
+/* ========== BLOG PRIMARY BUTTON ========== */
+.btn-blog {
+    background: linear-gradient(135deg, hsl(220, 70%, 42%) 0%, hsl(220, 70%, 55%) 100%);
+    box-shadow: 0 3px 12px hsla(220, 70%, 42%, 0.35);
+}
+
+.btn-blog:hover {
+    box-shadow: 0 6px 20px hsla(220, 70%, 42%, 0.45);
+}
+
+/* ========== BUCKET SELECT ROW ========== */
+.bucket-select-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.bucket-select-row .select-field {
+    flex: 1;
+}
+
+.select-field {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23718096' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+    cursor: pointer;
+}
+
+.btn-new-bucket {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    background: var(--primary-faint);
+    color: var(--primary);
+    border: 1.5px solid hsl(211, 69%, 80%);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--transition), transform var(--transition);
+}
+
+.btn-new-bucket:hover {
+    background: var(--primary);
+    color: #fff;
+    transform: scale(1.05);
+}
+
+/* ========== BUCKET FILTER WRAP ========== */
+.bucket-filter-wrap {
+    padding: 0 16px 6px;
+}
+
+/* ========== PLAN TYPE TAGS ========== */
+.plan-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.plan-type-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    letter-spacing: 0.2px;
+}
+
+.plan-type-tag--yt {
+    background: #fff0f0;
+    color: #cc0000;
+    border: 1px solid #ffcccc;
+}
+
+.plan-type-tag--blog {
+    background: hsl(220, 80%, 97%);
+    color: hsl(220, 70%, 42%);
+    border: 1px solid hsl(220, 70%, 85%);
+}
+
+/* Plan card blog variant */
+.plan-card--blog::before {
+    background: hsl(220, 70%, 50%);
+}
+
+/* Plan bucket chip */
+.plan-bucket-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    background: hsl(38, 80%, 95%);
+    color: hsl(38, 70%, 38%);
+    border: 1px solid hsl(38, 70%, 82%);
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ========== BUCKETS PANEL ========== */
+.new-bucket-form {
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px 6px;
+    border-bottom: 1px solid var(--border);
+}
+
+.new-bucket-form .input-field {
+    flex: 1;
+    font-size: 12.5px;
+    padding: 7px 10px;
+}
+
+.btn-create-bucket {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 7px 12px;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--transition), transform var(--transition);
+    flex-shrink: 0;
+}
+
+.btn-create-bucket:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+}
+
+/* Bucket list items */
+.bucket-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.bucket-item:hover {
+    border-color: hsl(211, 69%, 75%);
+    box-shadow: var(--shadow-sm);
+}
+
+.bucket-item-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.bucket-item-name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+}
+
+.bucket-item-count {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    background: var(--surface-2);
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border);
+}
+
+.bucket-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.plan-action-btn--open {
+    color: var(--primary);
+}
+.plan-action-btn--open:hover {
+    background: var(--primary-faint);
+}

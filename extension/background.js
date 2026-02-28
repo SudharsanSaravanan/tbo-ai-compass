@@ -12,9 +12,10 @@ const FRONTEND_ORIGINS = [
 ];
 
 const STORAGE_KEY = 'tbo_travel_plans';
+const BUCKETS_STORAGE_KEY = 'tbo_travel_buckets';
 
-// ── Helper: inject plans into localStorage of frontend tabs ──
-async function mirrorPlansToFrontend(plans) {
+// ── Helper: inject plans + buckets into localStorage of frontend tabs ──
+async function mirrorDataToFrontend(plans, buckets) {
     try {
         const tabs = await chrome.tabs.query({});
         for (const tab of tabs) {
@@ -24,18 +25,23 @@ async function mirrorPlansToFrontend(plans) {
             try {
                 await chrome.scripting.executeScript({
                     target: { tabId: tab.id },
-                    func: (key, data) => {
+                    func: (plansKey, plansData, bucketsKey, bucketsData) => {
                         try {
-                            localStorage.setItem(key, JSON.stringify(data));
-                            // Dispatch a storage event so React can pick it up
+                            localStorage.setItem(plansKey, JSON.stringify(plansData));
+                            localStorage.setItem(bucketsKey, JSON.stringify(bucketsData));
                             window.dispatchEvent(new StorageEvent('storage', {
-                                key: key,
-                                newValue: JSON.stringify(data),
+                                key: plansKey,
+                                newValue: JSON.stringify(plansData),
+                                storageArea: localStorage,
+                            }));
+                            window.dispatchEvent(new StorageEvent('storage', {
+                                key: bucketsKey,
+                                newValue: JSON.stringify(bucketsData),
                                 storageArea: localStorage,
                             }));
                         } catch (e) { }
                     },
-                    args: [STORAGE_KEY, plans],
+                    args: [STORAGE_KEY, plans, BUCKETS_STORAGE_KEY, buckets],
                 });
             } catch (_) {
                 // Tab may have restricted access, ignore
@@ -46,10 +52,11 @@ async function mirrorPlansToFrontend(plans) {
 
 // ── On install, initialise storage if empty ──
 chrome.runtime.onInstalled.addListener(() => {
-    chrome.storage.local.get([STORAGE_KEY], (result) => {
-        if (!result[STORAGE_KEY]) {
-            chrome.storage.local.set({ [STORAGE_KEY]: [] });
-        }
+    chrome.storage.local.get([STORAGE_KEY, BUCKETS_STORAGE_KEY], (result) => {
+        const updates = {};
+        if (!result[STORAGE_KEY]) updates[STORAGE_KEY] = [];
+        if (!result[BUCKETS_STORAGE_KEY]) updates[BUCKETS_STORAGE_KEY] = [];
+        if (Object.keys(updates).length) chrome.storage.local.set(updates);
     });
 
     // Reset badge
@@ -73,10 +80,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return true;
     }
 
-    // ── Acknowledge navigation events from content.js ──
-    // Without this handler the content script gets a "no receiving end" rejection.
     if (message.action === 'youtubeNavigation') {
-        // Nothing to do — popup reads the tab URL directly when opened.
         sendResponse({ ok: true });
         return true;
     }
@@ -84,37 +88,56 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 // ── Keep badge in sync on storage changes & mirror to frontend ──
 chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes[STORAGE_KEY]) {
-        const plans = changes[STORAGE_KEY].newValue || [];
-        const count = plans.length;
-        chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
-        chrome.action.setBadgeBackgroundColor({ color: '#f59e0b' });
-        // Mirror to any open frontend tab
-        mirrorPlansToFrontend(plans);
-    }
+    if (area !== 'local') return;
+
+    const plansChanged = !!changes[STORAGE_KEY];
+    const bucketsChanged = !!changes[BUCKETS_STORAGE_KEY];
+
+    if (!plansChanged && !bucketsChanged) return;
+
+    chrome.storage.local.get([STORAGE_KEY, BUCKETS_STORAGE_KEY], (result) => {
+        const plans = result[STORAGE_KEY] || [];
+        const buckets = result[BUCKETS_STORAGE_KEY] || [];
+
+        if (plansChanged) {
+            const count = plans.length;
+            chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
+            chrome.action.setBadgeBackgroundColor({ color: '#f59e0b' });
+        }
+
+        mirrorDataToFrontend(plans, buckets);
+    });
 });
 
-// ── When a frontend tab is updated/activated, push current plans ──
-async function pushPlansToTab(tabId, tabUrl) {
+// ── When a frontend tab is updated/activated, push current data ──
+async function pushDataToTab(tabId, tabUrl) {
     if (!tabUrl) return;
     const isFrontend = FRONTEND_ORIGINS.some(o => tabUrl.startsWith(o));
     if (!isFrontend) return;
-    chrome.storage.local.get([STORAGE_KEY], async (result) => {
+
+    chrome.storage.local.get([STORAGE_KEY, BUCKETS_STORAGE_KEY], async (result) => {
         const plans = result[STORAGE_KEY] || [];
+        const buckets = result[BUCKETS_STORAGE_KEY] || [];
         try {
             await chrome.scripting.executeScript({
                 target: { tabId },
-                func: (key, data) => {
+                func: (plansKey, plansData, bucketsKey, bucketsData) => {
                     try {
-                        localStorage.setItem(key, JSON.stringify(data));
+                        localStorage.setItem(plansKey, JSON.stringify(plansData));
+                        localStorage.setItem(bucketsKey, JSON.stringify(bucketsData));
                         window.dispatchEvent(new StorageEvent('storage', {
-                            key: key,
-                            newValue: JSON.stringify(data),
+                            key: plansKey,
+                            newValue: JSON.stringify(plansData),
+                            storageArea: localStorage,
+                        }));
+                        window.dispatchEvent(new StorageEvent('storage', {
+                            key: bucketsKey,
+                            newValue: JSON.stringify(bucketsData),
                             storageArea: localStorage,
                         }));
                     } catch (e) { }
                 },
-                args: [STORAGE_KEY, plans],
+                args: [STORAGE_KEY, plans, BUCKETS_STORAGE_KEY, buckets],
             });
         } catch (_) { }
     });
@@ -122,11 +145,11 @@ async function pushPlansToTab(tabId, tabUrl) {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url) {
-        pushPlansToTab(tabId, tab.url);
+        pushDataToTab(tabId, tab.url);
     }
 });
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
     const tab = await chrome.tabs.get(tabId).catch(() => null);
-    if (tab) pushPlansToTab(tabId, tab.url);
+    if (tab) pushDataToTab(tabId, tab.url);
 });
