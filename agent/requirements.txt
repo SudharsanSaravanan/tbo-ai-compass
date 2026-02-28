@@ -8,6 +8,9 @@ livekit-plugins-groq~=1.4.0
 # Cartesia TTS Plugin
 livekit-plugins-cartesia~=1.4.0
 
+# Silero VAD Plugin (fixes your ImportError)
+livekit-plugins-silero~=1.4.0
+
 # Environment variables
 python-dotenv>=1.0.0
 
