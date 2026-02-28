@@ -19,6 +19,9 @@ import os
 import re
 import json
 import time
+import tempfile
+import shutil
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime, timezone
@@ -34,10 +37,124 @@ load_dotenv()
 # Configuration
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_2_API_KEY = os.getenv("GROQ_2_API_KEY")
+GROQ_3_API_KEY = os.getenv("GROQ_3_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Initialize clients
-groq_client = Groq(api_key=GROQ_API_KEY)
+_groq_keys = [k for k in (GROQ_API_KEY, GROQ_2_API_KEY, GROQ_3_API_KEY) if k]
+_groq_index = 0
+
+
+def _get_groq_client() -> Groq:
+  """
+  Return a Groq client using the current key.
+  Keys are rotated on demand by helper functions when 429s are encountered.
+  """
+  global _groq_index
+  if not _groq_keys:
+      raise RuntimeError("No Groq API keys configured. Set GROQ_API_KEY (and optionally GROQ_2_API_KEY, GROQ_3_API_KEY).")
+  key = _groq_keys[_groq_index % len(_groq_keys)]
+  return Groq(api_key=key)
+
+
+def _rotate_groq_key() -> None:
+  """Advance to the next Groq API key (round‑robin)."""
+  global _groq_index
+  if not _groq_keys:
+      return
+  _groq_index = (_groq_index + 1) % len(_groq_keys)
+
+
+def _cerebras_chat_sync(**kwargs) -> object:
+    """
+    Synchronous Cerebras fallback.
+    Called when Groq fails with 413 (payload too large) or all keys hit rate limits.
+    Strips Groq-specific params (response_format, max_completion_tokens) before sending.
+    """
+    import httpx as _httpx
+
+    cerebras_key = os.getenv("CEREBRAS_API_KEY")
+    if not cerebras_key:
+        raise RuntimeError("CEREBRAS_API_KEY not set; cannot use Cerebras fallback.")
+
+    payload = {
+        "model": "llama3.1-8b",
+        "messages": kwargs.get("messages", []),
+        "max_tokens": kwargs.get("max_completion_tokens", kwargs.get("max_tokens", 1500)),
+        "temperature": kwargs.get("temperature", 0.3),
+        "top_p": 1,
+        "stream": False,
+    }
+
+    resp = _httpx.post(
+        "https://api.cerebras.ai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {cerebras_key}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=60,
+    )
+    resp.raise_for_status()
+    content = resp.json()["choices"][0]["message"]["content"]
+
+    # Return a minimal object that mirrors groq's completion response shape
+    class _Msg:
+        def __init__(self, c):
+            self.content = c
+
+    class _Choice:
+        def __init__(self, c):
+            self.message = _Msg(c)
+
+    class _Completion:
+        def __init__(self, c):
+            self.choices = [_Choice(c)]
+
+    return _Completion(content)
+
+
+def _groq_chat_with_rotation(**kwargs):
+    """
+    Call Groq chat.completions.create with key rotation on 429.
+    On 413 (payload too large), skip rotation and go straight to Cerebras.
+    If all Groq keys hit rate limits, also fall back to Cerebras.
+    """
+    last_err = None
+    tried = 0
+    total = len(_groq_keys) or 1
+
+    while tried < total:
+        client = _get_groq_client()
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as e:
+            msg = str(e)
+            last_err = e
+            if "413" in msg or "payload too large" in msg.lower():
+                # Payload is too large — rotating keys won't help, skip to Cerebras
+                print("  ⚠ Groq payload too large (413), using Cerebras fallback...")
+                break
+            if "429" in msg or "rate limit" in msg.lower():
+                print("  ⚠ Groq rate limit hit, rotating API key...")
+                _rotate_groq_key()
+                tried += 1
+                continue
+            raise
+
+    # All Groq keys exhausted or 413 — try Cerebras
+    print("  ⚠ Groq unavailable, falling back to Cerebras...")
+    try:
+        return _cerebras_chat_sync(**kwargs)
+    except Exception as cerebras_err:
+        print(f"  ✗ Cerebras fallback also failed: {cerebras_err}")
+        if last_err is not None:
+            raise last_err
+        raise cerebras_err
+
+
+groq_client = _get_groq_client()
 youtube = build("youtube", "v3", developerKey=GOOGLE_API_KEY)
 
 
@@ -64,8 +181,8 @@ class TravelQueryParser:
         Extract travel intent and constraints from user query
         Returns: {origin, destination, dates, budget, travel_style, raw_query}
         """
-        # Use Groq LLM to parse the query
-        completion = groq_client.chat.completions.create(
+        # Use Groq LLM to parse the query (with API key rotation on 429)
+        completion = _groq_chat_with_rotation(
             model=config.GROQ_MODEL,
             messages=[
                 {
@@ -130,7 +247,7 @@ Requirements:
 Return ONLY a JSON array of search query strings, nothing else.
 Example: ["goa to kanyakumari road trip", "coastal route india vlog", "goa kanyakumari itinerary guide"]"""
 
-        completion = groq_client.chat.completions.create(
+        completion = _groq_chat_with_rotation(
             model=config.GROQ_MODEL,
             messages=[
                 {"role": "user", "content": prompt}
@@ -332,34 +449,95 @@ class TranscriptFetcher:
     def fetch_transcript(video_id: str) -> Tuple[Optional[str], Optional[str]]:
         """
         Fetch transcript for a video ID.
-        Uses same logic as test1.py: list all, pick first available (any language).
+        Primary path: youtube_transcript_api. If that fails, fall back to
+        yt-dlp auto subtitles (English) so we still get something for videos
+        where transcripts are otherwise hard to retrieve.
         
         Returns:
             (full_text, language_code) or (None, None) if unavailable
         """
+        # First attempt: youtube_transcript_api (fast and lightweight)
         try:
-            # Strictly match test1.py: use API instance and .list(), first available (any language)
             ytt_api = YouTubeTranscriptApi()
             transcript_list = ytt_api.list(video_id)
-            
-            # Iterate and pick the first available transcript (any language)
+
             transcript = None
             for t in transcript_list:
                 transcript = t
                 break
-            
-            if transcript is None:
-                return None, None
-            
-            fetched = transcript.fetch()
-            # FetchedTranscript yields FetchedTranscriptSnippet objects (use .text attribute)
-            full_text = " ".join([entry.text for entry in fetched])
-            language_code = getattr(transcript, "language_code", None) or getattr(transcript, "language", "")
-            return full_text, language_code
-            
+
+            if transcript is not None:
+                fetched = transcript.fetch()
+                full_text = " ".join([entry.text for entry in fetched])
+                language_code = getattr(transcript, "language_code", None) or getattr(
+                    transcript, "language", ""
+                )
+                if full_text.strip():
+                    return full_text, language_code or None
         except Exception as e:
             print(f"Transcript fetch error for {video_id}: {e}")
+
+        # Fallback: try to pull auto-generated subtitles via yt-dlp.
+        tmpdir = None
+        try:
+            tmpdir = tempfile.mkdtemp(prefix="yt_sub_")
+            out_tpl = os.path.join(tmpdir, "%(id)s.%(ext)s")
+            cmd = [
+                "yt-dlp",
+                f"https://www.youtube.com/watch?v={video_id}",
+                "--skip-download",
+                "--write-auto-sub",
+                "--sub-lang",
+                "en",
+                "--sub-format",
+                "vtt",
+                "-o",
+                out_tpl,
+                "--quiet",
+                "--no-warnings",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                stderr = (result.stderr or "").strip()
+                print(f"  ⚠ yt-dlp subtitle fetch failed for {video_id}: {stderr}")
+                return None, None
+
+            vtt_path = None
+            for name in os.listdir(tmpdir):
+                if name.endswith(".vtt"):
+                    vtt_path = os.path.join(tmpdir, name)
+                    break
+            if not vtt_path or not os.path.exists(vtt_path):
+                return None, None
+
+            with open(vtt_path, "r", encoding="utf-8", errors="ignore") as f:
+                vtt_text = f.read()
+
+            lines = []
+            for line in vtt_text.splitlines():
+                line = line.strip()
+                if (
+                    not line
+                    or line.startswith("WEBVTT")
+                    or "-->" in line
+                    or line.isdigit()
+                ):
+                    continue
+                lines.append(line)
+            plain_text = " ".join(lines).strip()
+            if not plain_text:
+                return None, None
+            return plain_text, "en"
+
+        except Exception as e:
+            print(f"  ⚠ yt-dlp transcript fallback error for {video_id}: {e}")
             return None, None
+        finally:
+            if tmpdir is not None:
+                try:
+                    shutil.rmtree(tmpdir, ignore_errors=True)
+                except Exception:
+                    pass
 
 
 class TranscriptTranslator:
@@ -451,7 +629,7 @@ Output ONLY the English translation, no explanations or quotes.
 
 Text:
 {chunk}"""
-            completion = groq_client.chat.completions.create(
+            completion = _groq_chat_with_rotation(
                 model=config.TRANSLATION_MODEL_GROQ,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
@@ -529,16 +707,18 @@ Return ONLY valid JSON with no extra text:
 {{"route_match": <0.0-1.0>, "actionability": <0.0-1.0>, "authenticity": <0.0-1.0>, "reasoning": "<one short sentence>"}}"""
 
         try:
-            completion = groq_client.chat.completions.create(
+            # IMPORTANT: heavy scoring goes straight to Cerebras to avoid Groq TPM limits.
+            # Groq is still used for light tasks (parsing, query generation), but not for this
+            # large, multi-video scoring loop.
+            completion = _cerebras_chat_sync(
                 model=config.GROQ_MODEL,
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
                 temperature=config.SCORING_TEMPERATURE,
                 max_completion_tokens=config.SCORING_MAX_TOKENS,
-                response_format={"type": "json_object"}
             )
-            
+
             raw = completion.choices[0].message.content or ""
             scores = json.loads(raw)
             return scores
@@ -613,124 +793,125 @@ class YouTubePipeline:
         video["_timings"] = timings
         return video, timings
     
+    def _summarize_transcript(self, transcript: str, video_title: str, parsed_intent: Dict) -> str:
+        """Summarize a transcript into actionable travel context using Cerebras."""
+        destination = parsed_intent.get("destination", "the destination")
+        words = transcript.split()[:2000]
+        chunk = " ".join(words)
+        prompt = (
+            f"Summarize the key travel information from this YouTube video transcript "
+            f"about traveling to {destination}.\n\n"
+            f"Video: {video_title}\nTranscript:\n{chunk}\n\n"
+            "Extract: specific places visited, food recommendations, costs mentioned, "
+            "accommodation tips, transport details, timings, and any insider tips. "
+            "Return a concise bullet-point summary (max 300 words)."
+        )
+        try:
+            completion = _cerebras_chat_sync(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=800,
+            )
+            return (completion.choices[0].message.content or "").strip()
+        except Exception as e:
+            print(f"  ⚠ Transcript summarization failed: {e}")
+            return ""
+
     def run(self, user_query: str, top_n: int = None) -> Dict:
         """
-        Execute full pipeline
-        
-        Args:
-            user_query: Natural language travel query
-            top_n: Number of top videos to deeply analyze (fetch transcripts + score)
-        
-        Returns:
-            {
-                'intent': parsed intent,
-                'search_queries': generated queries,
-                'total_candidates': count,
-                'analyzed_videos': list of scored videos,
-                'report_path': path to generated report
-            }
+        Execute pipeline: search, rank by metrics, get transcript for ONLY the
+        top-1 video, summarize it, and return context for itinerary generation.
         """
         if top_n is None:
             top_n = config.TOP_N_FOR_ANALYSIS
-            
-        print("\n" + "="*70)
+
+        print("\n" + "=" * 70)
         print("YOUTUBE TRAVEL VIDEO ANALYSIS PIPELINE")
-        print("Using yt-dlp for search (0 API quota) + YouTube API for metrics")
-        print("="*70)
-        
+        print("Top-1 transcript mode (minimal API usage)")
+        print("=" * 70)
+
         # Step 1: Parse query
-        print(f"\n[1/6] Parsing user query...")
+        print(f"\n[1/5] Parsing user query...")
         parsed_intent = self.parser.parse_query(user_query)
         print(f"  ✓ Origin: {parsed_intent.get('origin')}")
         print(f"  ✓ Destination: {parsed_intent.get('destination')}")
         print(f"  ✓ Travel Style: {parsed_intent.get('travel_style')}")
-        
+
         # Step 2: Generate search queries
-        print(f"\n[2/6] Generating YouTube search queries...")
+        print(f"\n[2/5] Generating YouTube search queries...")
         search_queries = self.query_gen.generate_queries(parsed_intent)
         print(f"  ✓ Generated {len(search_queries)} search queries:")
         for i, q in enumerate(search_queries, 1):
-            print(f"    {i}. \"{q}\"")
-        
+            print(f'    {i}. "{q}"')
+
         # Step 3: Search YouTube
-        print(f"\n[3/6] Searching YouTube using yt-dlp (NO API QUOTA!)...")
+        print(f"\n[3/5] Searching YouTube using yt-dlp (NO API QUOTA!)...")
         video_ids = self.collector.search_videos(search_queries)
         print(f"  ✓ Found {len(video_ids)} unique videos (0 quota units used)")
-        
-        # Step 4: Enrich with metadata
-        print(f"\n[4/6] Enriching videos with YouTube API (videos.list - cheap!)...")
+
+        # Step 4: Enrich with metadata + rank
+        print(f"\n[4/5] Enriching videos with YouTube API (videos.list)...")
         enriched_videos = self.collector.enrich_videos(video_ids)
-        quota_used = max(1, len(video_ids) // config.VIDEO_BATCH_SIZE)
+        enriched_videos.sort(key=lambda x: x["engagement_score"], reverse=True)
         print(f"  ✓ Enriched {len(enriched_videos)} videos (after filtering)")
-        print(f"  ✓ API quota used: ~{quota_used} units (vs 600+ with search.list!)")
-        
-        # Sort by engagement score and select top N
-        enriched_videos.sort(key=lambda x: x['engagement_score'], reverse=True)
-        top_videos = enriched_videos[:top_n]
-        
-        print(f"  ✓ Selected top {len(top_videos)} for deep analysis")
-        
-        # Step 5: Fetch transcripts and score (parallel per-video)
-        total_videos = len(top_videos)
-        max_workers = getattr(config, "ANALYSIS_MAX_WORKERS", 5)
-        step5_start = time.perf_counter()
-        print(f"\n[5/6] Analyzing {total_videos} videos (workers={max_workers})...")
-        print(f"       Progress: [completed/{total_videos}] | transcript | translate | score | total time")
-        print(f"       " + "-" * 60)
-        analyzed_videos = []
-        completed = 0
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(self._analyze_one_video, video, parsed_intent): video
-                for video in top_videos
-            }
-            for future in as_completed(futures):
-                completed += 1
-                elapsed_total = time.perf_counter() - step5_start
-                try:
-                    video, timings = future.result()
-                    analyzed_videos.append(video)
-                    t = timings
-                    total_s = t.get("transcript_s", 0) + t.get("translate_s", 0) + t.get("score_s", 0)
-                    title = (video.get("title") or "")[:42]
-                    if video.get("has_transcript"):
-                        s = video.get("scores", {})
-                        print(f"  [{completed}/{total_videos}] {title}... | "
-                              f"transcript {t.get('transcript_s', 0):.1f}s | translate {t.get('translate_s', 0):.1f}s | score {t.get('score_s', 0):.1f}s | total {total_s:.1f}s | "
-                              f"R:{s.get('route_match', 0):.2f} A:{s.get('actionability', 0):.2f} Auth:{s.get('authenticity', 0):.2f} ✓")
-                    else:
-                        print(f"  [{completed}/{total_videos}] {title}... | transcript {t.get('transcript_s', 0):.1f}s | no transcript | — | {total_s:.1f}s ✗")
-                except Exception as e:
-                    orig = futures[future]
-                    orig["scores"] = {"route_match": 0.0, "actionability": 0.0, "authenticity": 0.0, "reasoning": str(e)}
-                    orig["has_transcript"] = False
-                    orig["_timings"] = {"transcript_s": 0, "translate_s": 0, "score_s": 0}
-                    analyzed_videos.append(orig)
-                    print(f"  [{completed}/{total_videos}] {orig.get('title', '')[:42]}... ⚠ Failed: {e}")
-        step5_elapsed = time.perf_counter() - step5_start
-        # Restore original order (by position in top_videos)
-        order = {v["video_id"]: i for i, v in enumerate(top_videos)}
-        analyzed_videos.sort(key=lambda v: order[v["video_id"]])
-        print(f"       " + "-" * 60)
-        print(f"  Step 5 completed in {step5_elapsed:.1f}s ({total_videos} videos, {max_workers} workers)")
-        for v in analyzed_videos:
-            v.pop("_timings", None)
-        
-        # Step 6: Generate report
-        print(f"\n[6/6] Generating analysis report...")
-        report_path = self._generate_report(parsed_intent, search_queries, enriched_videos, analyzed_videos)
-        print(f"  ✓ Report saved to: {report_path}")
-        
-        print("\n" + "="*70)
+
+        # Step 5: Fetch transcript ONLY for top-1 video, summarize via Cerebras
+        print(f"\n[5/5] Fetching transcript for top-1 video only...")
+        primary_video = None
+        transcript_summary = ""
+        for candidate in enriched_videos[:5]:
+            t0 = time.perf_counter()
+            transcript_text, lang_code = self.transcript_fetcher.fetch_transcript(
+                candidate["video_id"]
+            )
+            t1 = time.perf_counter()
+            if not transcript_text:
+                print(f"  ✗ No transcript for: {candidate['title'][:50]}  ({t1 - t0:.1f}s)")
+                continue
+            print(f"  ✓ Got transcript for: {candidate['title'][:50]}  ({t1 - t0:.1f}s)")
+
+            if lang_code and lang_code not in config.ENGLISH_LANGUAGE_CODES and config.TRANSLATE_TO_ENGLISH:
+                t0 = time.perf_counter()
+                transcript_text = self.translator.translate_to_english(
+                    transcript_text, source_language_code=lang_code
+                ) or transcript_text
+                print(f"    Translated in {time.perf_counter() - t0:.1f}s")
+
+            t0 = time.perf_counter()
+            transcript_summary = self._summarize_transcript(
+                transcript_text, candidate["title"], parsed_intent
+            )
+            print(f"    Summarized in {time.perf_counter() - t0:.1f}s ({len(transcript_summary)} chars)")
+
+            candidate["has_transcript"] = True
+            candidate["transcript_summary"] = transcript_summary
+            primary_video = candidate
+            break
+
+        context_videos = []
+        for v in enriched_videos[:top_n]:
+            vid = v["video_id"]
+            if primary_video and vid == primary_video["video_id"]:
+                continue
+            context_videos.append(v)
+
+        print("\n" + "=" * 70)
         print("PIPELINE COMPLETE")
-        print("="*70 + "\n")
-        
+        if primary_video:
+            print(f"  Primary video: {primary_video['title'][:60]}")
+            print(f"  Context videos: {len(context_videos)}")
+        else:
+            print("  ⚠ No video with transcript found")
+        print("=" * 70 + "\n")
+
         return {
-            'intent': parsed_intent,
-            'search_queries': search_queries,
-            'total_candidates': len(enriched_videos),
-            'analyzed_videos': analyzed_videos,
-            'report_path': report_path
+            "intent": parsed_intent,
+            "search_queries": search_queries,
+            "total_candidates": len(enriched_videos),
+            "primary_video": primary_video,
+            "context_videos": context_videos,
+            "transcript_summary": transcript_summary,
+            "analyzed_videos": ([primary_video] if primary_video else []) + context_videos,
         }
     
     def _generate_report(self, intent: Dict, queries: List[str], 
