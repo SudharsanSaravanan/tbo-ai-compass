@@ -83,9 +83,32 @@ export default function Index() {
   }, []);
 
   const handleSearch = () => {
-    const q = query.trim() || "Trip";
-    const o = origin.trim();
-    navigate("/plan", { state: { query: q, origin: o, date: travelDate, adults, children } });
+    const destination = query.trim();
+    const from = origin.trim();
+
+    // If no fields are filled, navigate directly to the plan page as usual
+    if (!destination && !from && !travelDate) {
+      navigate("/plan");
+      return;
+    }
+
+    // Build a structured natural-language query from the filled fields
+    const parts: string[] = ["I want to plan a trip"];
+    if (from) parts.push(`from ${from}`);
+    if (destination) parts.push(`to ${destination}`);
+    if (travelDate) {
+      const formatted = format(travelDate, "MMMM d, yyyy");
+      parts.push(`during ${formatted}`);
+    }
+    const totalPeople = adults + children;
+    const peopleDesc = children > 0
+      ? `${adults} adult${adults !== 1 ? "s" : ""} and ${children} child${children !== 1 ? "ren" : ""}`
+      : `${adults} adult${adults !== 1 ? "s" : ""}`;
+    parts.push(`for ${peopleDesc} (${totalPeople} ${totalPeople === 1 ? "person" : "people"} total)`);
+
+    const initialMessage = parts.join(" ") + ". Please plan this trip for me.";
+
+    navigate("/plan", { state: { query: destination || from || "Trip", initialMessage } });
   };
 
   const handleGenerateItinerary = (plan: SavedPlan) => {

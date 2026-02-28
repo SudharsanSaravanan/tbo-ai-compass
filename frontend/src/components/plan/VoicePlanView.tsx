@@ -4,7 +4,7 @@
  * Right = conversation transcript + text input.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -94,6 +94,8 @@ function VoiceRoomContent({
   contextVideos,
   discoveryStatus,
   setDiscoveryStatus,
+  initialMessage,
+  initialMessageSentRef,
 }: {
   onItineraryUpdate: (p: ItineraryPayload) => void;
   itinerary: ItineraryPayload | null;
@@ -109,6 +111,9 @@ function VoiceRoomContent({
   contextVideos: ContextVideo[];
   discoveryStatus: "idle" | "running" | "done";
   setDiscoveryStatus: (s: "idle" | "running" | "done") => void;
+  initialMessage?: string;
+  /** Stable ref from VoicePlanView so it survives StrictMode double-mount */
+  initialMessageSentRef: MutableRefObject<boolean>;
 }) {
   const room = useRoomContext();
   const [inputText, setInputText] = useState("");
@@ -121,6 +126,26 @@ function VoiceRoomContent({
   useEffect(() => {
     setConnected(room.state === "connected");
   }, [room.state]);
+
+  // Auto-send initialMessage exactly once when the room first becomes connected.
+  // NOTE: we do NOT manually add to transcript here — the agent echoes the
+  // message back as a `user_transcript` data-channel event, which is the same
+  // path normal typed messages go through. Adding it manually AND waiting for
+  // the echo was causing the double-bubble.
+  useEffect(() => {
+    if (!initialMessage || !connected || initialMessageSentRef.current) return;
+
+    const local = room.localParticipant;
+    if (!local) return;
+
+    initialMessageSentRef.current = true;
+
+    // Send to agent via the text channel (same as handleSendText)
+    (local as any).sendText(initialMessage, { topic: "lk.chat" }).catch((e: unknown) => {
+      console.error("Failed to send initial trip query", e);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, initialMessage]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -581,10 +606,12 @@ function VoiceRoomContent({
 
 interface VoicePlanViewProps {
   initialQuery: string;
+  /** Optional pre-composed trip query to auto-send to the agent once connected */
+  initialMessage?: string;
   onBack: () => void;
 }
 
-export default function VoicePlanView({ initialQuery, onBack }: VoicePlanViewProps) {
+export default function VoicePlanView({ initialQuery, initialMessage, onBack }: VoicePlanViewProps) {
   const [token, setToken] = useState<string | null>(null);
   const [wsUrl, setWsUrl] = useState<string>("");
   const [roomName] = useState(() => `plan-${initialQuery.replace(/\s+/g, "-")}-${Date.now()}`);
@@ -601,6 +628,15 @@ export default function VoicePlanView({ initialQuery, onBack }: VoicePlanViewPro
   const [primaryVideo, setPrimaryVideo] = useState<VideoInfo | null>(null);
   const [contextVideos, setContextVideos] = useState<ContextVideo[]>([]);
   const [discoveryStatus, setDiscoveryStatus] = useState<"idle" | "running" | "done">("idle");
+
+  // Lives here (outside VoiceRoomContent) so StrictMode double-mount doesn't reset it
+  const initialMessageSentRef = useRef(false);
+
+  // Stable callback — avoids VoiceRoomContent effects re-running on every render
+  const handleTranscript = useCallback(
+    (t: TranscriptEntry) => setTranscripts((prev) => [...prev, t]),
+    []
+  );
 
   useEffect(() => {
     const url = `${TOKEN_API}/token?room=${encodeURIComponent(roomName)}`;
@@ -677,7 +713,7 @@ export default function VoicePlanView({ initialQuery, onBack }: VoicePlanViewPro
             onItineraryUpdate={setItinerary}
             itinerary={itinerary}
             transcripts={transcripts}
-            onTranscript={(t) => setTranscripts((prev) => [...prev, t])}
+            onTranscript={handleTranscript}
             onLocations={handleLocations}
             locations={locations}
             onDates={setDates}
@@ -688,6 +724,8 @@ export default function VoicePlanView({ initialQuery, onBack }: VoicePlanViewPro
             contextVideos={contextVideos}
             discoveryStatus={discoveryStatus}
             setDiscoveryStatus={setDiscoveryStatus}
+            initialMessage={initialMessage}
+            initialMessageSentRef={initialMessageSentRef}
           />
           <RoomAudioRenderer />
         </LiveKitRoom>
