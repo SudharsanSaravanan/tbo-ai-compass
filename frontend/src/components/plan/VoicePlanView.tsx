@@ -21,6 +21,7 @@ import {
   Send,
   Loader2,
   Youtube,
+  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LiveWaveform } from "@/components/ui/live-waveform";
@@ -35,6 +36,32 @@ import VideoCard, { SmallVideoCard, type VideoInfo } from "./VideoCard";
 const APP_DATA_TOPIC = "tbo-app-data";
 const TOKEN_API = import.meta.env.VITE_TOKEN_API || "http://localhost:8765";
 const LIVEKIT_WS = import.meta.env.VITE_LIVEKIT_WS || "";
+
+/**
+ * Strip any LLM function-call markup that leaks into agent text.
+ * Handles all known variants:
+ *   - <function=name>...</function>   (well-formed)
+ *   - <function_calls>...</function_calls>  (XML-style)
+ *   - <function> / <function ...>  (bare / unclosed — strips to end of string)
+ *   - }<function  (dangling JSON + tag start, e.g. "travelers": "2 adults"}<function>)
+ *   - leftover </function> closing tags
+ */
+function cleanAgentText(text: string): string {
+  let out = text;
+  // Well-formed blocks
+  out = out.replace(/<function=[^>]+>[\s\S]*?<\/function>/g, "");
+  // XML-style function_calls blocks
+  out = out.replace(/<function_calls>[\s\S]*?<\/function_calls>/g, "");
+  // Bare / unclosed <function> or <function ...> — nuke from that point to end
+  out = out.replace(/<function[\s>=][\s\S]*$/g, "");
+  out = out.replace(/<function>[\s\S]*$/g, "");
+  // Dangling JSON fragment + tag: e.g. "value"}<function or "value"}{ ...
+  out = out.replace(/\}\s*<[\s\S]*$/g, "");
+  out = out.replace(/\}\s*\{[\s\S]*$/g, "");
+  // Any remaining stray tags
+  out = out.replace(/<\/?function[^>]*>/g, "");
+  return out.trim();
+}
 
 /* ─── Types ─── */
 
@@ -213,7 +240,7 @@ function VoiceRoomContent({
               if (data.text) onTranscript({ id: `u-${Date.now()}`, role: "user", text: data.text });
               break;
             case "agent_transcript":
-              if (data.text) onTranscript({ id: `a-${Date.now()}`, role: "agent", text: data.text });
+              if (data.text) onTranscript({ id: `a-${Date.now()}`, role: "agent", text: cleanAgentText(data.text) });
               break;
           }
         } catch {
@@ -269,328 +296,405 @@ function VoiceRoomContent({
     experience: <Camera className="h-3 w-3" />,
   };
   const typeColor: Record<string, string> = {
-    place: "text-primary bg-primary/10",
-    food: "text-orange-600 bg-orange-500/10",
-    transport: "text-muted-foreground bg-secondary",
-    experience: "text-emerald-600 bg-emerald-500/10",
+    place: "text-blue-700 bg-blue-50 border-blue-100/80",
+    food: "text-orange-600 bg-orange-50 border-orange-100/80",
+    transport: "text-slate-500 bg-slate-100/80 border-slate-200/60",
+    experience: "text-emerald-700 bg-emerald-50 border-emerald-100/80",
   };
 
   return (
     <div className="flex-1 flex min-h-0 h-full">
       {/* ═══ LEFT: Waveform (fixed) + Scrollable Content ═══ */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Fixed waveform section */}
-        <div className="shrink-0 border-b border-border px-6 py-4 bg-background/80 backdrop-blur-sm">
-          <div className="flex items-center justify-center gap-4">
-            <div
-              className={cn(
-                "w-44 h-16 rounded-xl border-2 flex items-center justify-center transition-all",
-                connected ? "border-primary bg-primary/5" : "border-muted bg-muted/30",
-                discoveryStatus === "running" && "opacity-30"
-              )}
-            >
-              {connected ? (
-                <LiveWaveform active height={48} barWidth={3} barGap={2} mode="static" fadeEdges barColor="primary" />
-              ) : (
-                <span className="text-xs text-muted-foreground">Connecting…</span>
-              )}
-            </div>
-            <div className="text-left">
-              <p className="text-sm text-foreground font-medium">
-                {connected
-                  ? discoveryStatus === "running"
-                    ? "Analyzing videos for your trip…"
-                    : "Speak — the agent is listening"
-                  : "Waiting for room…"}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {discoveryStatus === "running"
-                  ? "We'll resume once analysis finishes."
-                  : "You can also type below."}
-              </p>
-            </div>
-          </div>
-
-          {/* Discovery progress */}
-          <AnimatePresence>
-            {discoveryStatus === "running" && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-3 flex items-center gap-2 justify-center"
-              >
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                <span className="text-[11px] text-muted-foreground">
-                  {discoveryQuery
-                    ? `Searching YouTube for "${discoveryQuery.slice(0, 60)}"…`
-                    : "Searching YouTube for travel videos…"}
-                </span>
-              </motion.div>
+        {/* Voice Hero Section */}
+        <div className="shrink-0 border-b border-border/50">
+          <div
+            className={cn(
+              "px-6 py-5 transition-all",
+              "bg-gradient-to-r from-primary/5 via-background to-primary/5",
+              discoveryStatus === "running" && "from-amber-50/60 via-background to-amber-50/60"
             )}
-          </AnimatePresence>
+          >
+            <div className="flex items-center justify-center gap-5">
+              {/* Waveform orb */}
+              <div
+                className={cn(
+                  "relative w-48 h-16 rounded-2xl flex items-center justify-center transition-all duration-500",
+                  connected
+                    ? "bg-primary/8 border border-primary/20 shadow-[0_0_24px_rgba(var(--primary),0.12)]"
+                    : "bg-muted/40 border border-border",
+                  discoveryStatus === "running" && "opacity-40"
+                )}
+              >
+                {connected ? (
+                  <LiveWaveform active height={48} barWidth={3} barGap={2} mode="static" fadeEdges barColor="primary" />
+                ) : (
+                  <span className="text-xs text-muted-foreground tracking-wide">Connecting…</span>
+                )}
+              </div>
+
+              {/* Status text */}
+              <div className="text-left space-y-0.5">
+                <p className={cn(
+                  "text-sm font-semibold tracking-tight",
+                  connected ? "text-foreground" : "text-muted-foreground"
+                )}>
+                  {connected
+                    ? discoveryStatus === "running"
+                      ? "Analyzing videos for your trip…"
+                      : "Speak — the agent is listening"
+                    : "Waiting for room…"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {discoveryStatus === "running"
+                    ? "Mic muted. We'll resume once analysis finishes."
+                    : "Your voice is live. You can also type below."}
+                </p>
+              </div>
+            </div>
+
+            {/* Discovery progress pill */}
+            <AnimatePresence>
+              {discoveryStatus === "running" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-3 flex items-center gap-2 justify-center"
+                >
+                  <div className="inline-flex items-center gap-2 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/40 rounded-full px-3 py-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span className="text-[10px] font-medium">
+                      {discoveryQuery
+                        ? `Searching "${discoveryQuery.slice(0, 50)}"…`
+                        : "Searching travel videos…"}
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
-        {/* Scrollable content area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {/* Map section */}
-          <AnimatePresence>
-            {hasMap && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <MapPin className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs font-semibold text-foreground">Route</span>
-                  {locations.origin && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600">
-                      {locations.origin.name}
-                    </span>
+        {/* Scrollable content area — premium SaaS layout */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto bg-slate-50/60 dark:bg-background">
+          <div className="px-4 py-5 space-y-4">
+
+            {/* ── SECTION 1: Calendar + Map side-by-side ── */}
+            <AnimatePresence>
+              {(hasMap || hasDates) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45 }}
+                  className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-4"
+                >
+                  {/* Calendar card */}
+                  {hasDates && dates && (
+                    <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-4 flex flex-col">
+                      <TripCalendar
+                        startDate={dates.start_date}
+                        endDate={dates.end_date}
+                        numDays={dates.num_days}
+                      />
+                    </div>
                   )}
-                  {locations.destination && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-600">
-                      {locations.destination.name}
-                    </span>
+                  {/* Calendar skeleton */}
+                  {!hasDates && hasMap && (
+                    <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-4 space-y-3">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-[220px] w-full rounded-xl" />
+                    </div>
                   )}
-                </div>
-                <TripMap origin={locations.origin} destination={locations.destination} />
-              </motion.div>
-            )}
-          </AnimatePresence>
 
-          {/* Map skeleton (before map data) */}
-          {!hasMap && transcripts.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <MapPin className="h-3.5 w-3.5 text-muted-foreground/40" />
-                <Skeleton className="h-3 w-20" />
-              </div>
-              <Skeleton className="h-[160px] w-full rounded-xl" />
-            </div>
-          )}
-
-          {/* Calendar section */}
-          <AnimatePresence>
-            {hasDates && dates && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.1 }}
-              >
-                <TripCalendar
-                  startDate={dates.start_date}
-                  endDate={dates.end_date}
-                  numDays={dates.num_days}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Calendar skeleton */}
-          {!hasDates && hasMap && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-3.5 w-3.5 rounded" />
-                <Skeleton className="h-3 w-24" />
-              </div>
-              <Skeleton className="h-[200px] w-full rounded-xl" />
-            </div>
-          )}
-
-          {/* Weather section */}
-          <AnimatePresence>
-            {hasWeather && dates && locations.destination && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.2 }}
-              >
-                <TripWeather
-                  lat={locations.destination.lat}
-                  lng={locations.destination.lng}
-                  startDate={dates.start_date}
-                  endDate={dates.end_date}
-                  destinationName={locations.destination.name}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Primary video card */}
-          <AnimatePresence>
-            {primaryVideo && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-              >
-                <VideoCard video={primaryVideo} label="Primary video used for planning" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Context videos */}
-          <AnimatePresence>
-            {contextVideos.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-1.5"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <Youtube className="h-3.5 w-3.5 text-red-500" />
-                  <span className="text-[10px] font-semibold text-muted-foreground">
-                    Also found based on metrics
-                  </span>
-                </div>
-                {contextVideos.slice(0, 4).map((v) => (
-                  <SmallVideoCard key={v.video_id} {...v} />
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Discovery video skeleton */}
-          {discoveryStatus === "running" && !primaryVideo && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Youtube className="h-3.5 w-3.5 text-muted-foreground/40" />
-                <Skeleton className="h-3 w-36" />
-              </div>
-              <Skeleton className="h-[180px] w-full rounded-xl" />
-              <div className="space-y-1.5">
-                {[1, 2].map((i) => (
-                  <Skeleton key={i} className="h-12 w-full rounded-lg" />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Live Itinerary */}
-          <AnimatePresence>
-            {itinerary?.days?.length ? (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span className="text-xs font-semibold text-foreground">Live Itinerary</span>
-                  <span className="text-[10px] text-muted-foreground ml-auto">{itinerary.destination}</span>
-                </div>
-                <div className="space-y-5">
-                  {itinerary.days.map((d) => (
-                    <div key={d.day} className="space-y-1.5">
+                  {/* Map card */}
+                  {hasMap && (
+                    <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-4 flex flex-col gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                          Day {d.day}
-                        </span>
-                        <span className="text-xs font-medium text-foreground">{d.title}</span>
+                        <MapPin className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-xs font-semibold text-foreground">Route</span>
+                        {locations.origin && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 font-medium border border-green-200/60">
+                            {locations.origin.name}
+                          </span>
+                        )}
+                        {locations.destination && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 font-medium border border-red-200/60">
+                            {locations.destination.name}
+                          </span>
+                        )}
                       </div>
-                      <div className="space-y-1 pl-2 border-l-2 border-border/60 ml-1">
-                        {d.items.map((it, i) => (
-                          <div
-                            key={i}
-                            className={cn(
-                              "flex items-start gap-2 rounded-lg px-2 py-1.5 text-[11px]",
-                              typeColor[it.type] || "bg-secondary"
-                            )}
-                          >
-                            <span className="mt-0.5 shrink-0">{typeIcon[it.type]}</span>
-                            <div className="min-w-0">
-                              <span className="font-semibold">{it.time}</span>{" "}
-                              <span>{it.title}</span>
-                              {it.note && (
-                                <span className="block text-muted-foreground text-[10px]">{it.note}</span>
-                              )}
-                            </div>
+                      <div className="rounded-xl overflow-hidden flex-1 min-h-[200px]">
+                        <TripMap origin={locations.origin} destination={locations.destination} />
+                      </div>
+                    </div>
+                  )}
+                  {/* Map skeleton */}
+                  {!hasMap && transcripts.length > 0 && (
+                    <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3.5 w-3.5 text-muted-foreground/40" />
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                      <Skeleton className="h-[200px] w-full rounded-xl" />
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* skeleton row when nothing yet */}
+            {!hasMap && !hasDates && transcripts.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-4">
+                <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-4 space-y-3">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-[220px] w-full rounded-xl" />
+                </div>
+                <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground/40" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                  <Skeleton className="h-[200px] w-full rounded-xl" />
+                </div>
+              </div>
+            )}
+
+            {/* ── SECTION 2: Weather ── */}
+            <AnimatePresence>
+              {hasWeather && dates && locations.destination && (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.08 }}
+                >
+                  <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-5">
+                    <TripWeather
+                      lat={locations.destination.lat}
+                      lng={locations.destination.lng}
+                      startDate={dates.start_date}
+                      endDate={dates.end_date}
+                      destinationName={locations.destination.name}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* ── SECTION 3: YouTube video ── */}
+            <AnimatePresence>
+              {primaryVideo && (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm overflow-hidden">
+                    <div className="px-4 pt-4 pb-1">
+                      <span className="text-[10px] font-semibold text-primary uppercase tracking-widest">
+                        Video Reference
+                      </span>
+                    </div>
+                    <VideoCard video={primaryVideo} />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Context videos */}
+            <AnimatePresence>
+              {contextVideos.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-4 space-y-2"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Youtube className="h-3.5 w-3.5 text-red-500" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Also found based on metrics
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {contextVideos.slice(0, 4).map((v) => (
+                      <SmallVideoCard key={v.video_id} {...v} />
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Discovery video skeleton */}
+            {discoveryStatus === "running" && !primaryVideo && (
+              <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Youtube className="h-3.5 w-3.5 text-muted-foreground/40" />
+                  <Skeleton className="h-3 w-36" />
+                </div>
+                <Skeleton className="h-[160px] w-full rounded-xl" />
+                <div className="space-y-1.5">
+                  {[1, 2].map((i) => (
+                    <Skeleton key={i} className="h-12 w-full rounded-lg" />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── SECTION 4: Itinerary timeline ── */}
+            <AnimatePresence>
+              {itinerary?.days?.length ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-5"
+                >
+                  {/* Itinerary header */}
+                  <div className="flex items-center gap-2 mb-5">
+                    <FileText className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold text-foreground">Live Itinerary</span>
+                    <span className="ml-auto text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      {itinerary.destination}
+                    </span>
+                  </div>
+
+                  {/* Timeline days */}
+                  <div className="space-y-7">
+                    {itinerary.days.map((d, di) => (
+                      <div key={d.day} className="relative">
+                        {/* Day pill */}
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-[10px] font-bold shrink-0 shadow-sm">
+                            {d.day}
                           </div>
-                        ))}
+                          <span className="text-xs font-semibold text-foreground">{d.title}</span>
+                          {di < itinerary.days.length - 1 && (
+                            <div className="absolute left-3.5 top-7 bottom-0 w-px bg-border/70 -translate-x-1/2" />
+                          )}
+                        </div>
+
+                        {/* Activity cards */}
+                        <div className="pl-10 space-y-2">
+                          {d.items.map((it, i) => (
+                            <div
+                              key={i}
+                              className={cn(
+                                "flex items-start gap-3 rounded-xl px-3 py-2.5 text-[11px] border border-transparent transition-shadow hover:shadow-sm",
+                                typeColor[it.type] || "bg-slate-50 border-slate-100"
+                              )}
+                            >
+                              <span className="mt-0.5 shrink-0 opacity-80">{typeIcon[it.type]}</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-baseline gap-2 flex-wrap">
+                                  <span className="font-semibold text-[10px] tabular-nums text-muted-foreground/80">{it.time}</span>
+                                  <span className="font-semibold text-foreground">{it.title}</span>
+                                </div>
+                                {it.note && (
+                                  <span className="block text-muted-foreground text-[10px] mt-0.5 leading-relaxed">{it.note}</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                </motion.div>
+              ) : discoveryStatus !== "idle" || transcripts.length > 4 ? (
+                <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground/40" />
+                    <Skeleton className="h-3.5 w-28" />
+                  </div>
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="space-y-2 pl-10">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-9 w-full rounded-xl" />
+                      <Skeleton className="h-9 w-5/6 rounded-xl" />
+                      <Skeleton className="h-9 w-4/5 rounded-xl" />
                     </div>
                   ))}
                 </div>
-              </motion.div>
-            ) : discoveryStatus !== "idle" || transcripts.length > 4 ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground/40" />
-                  <Skeleton className="h-3.5 w-28" />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <FileText className="h-8 w-8 text-muted-foreground/20 mb-3" />
+                  <p className="text-xs text-muted-foreground italic">
+                    Answer the agent's questions — your trip plan will build here.
+                  </p>
                 </div>
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="space-y-2">
-                    <Skeleton className="h-4 w-40" />
-                    <div className="space-y-1 pl-3">
-                      <Skeleton className="h-8 w-full rounded-lg" />
-                      <Skeleton className="h-8 w-5/6 rounded-lg" />
-                      <Skeleton className="h-8 w-4/5 rounded-lg" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground italic text-center py-8">
-                Answer the agent's questions — your trip plan will build here.
-              </p>
-            )}
-          </AnimatePresence>
+              )}
+            </AnimatePresence>
+
+          </div>
         </div>
       </div>
 
       {/* ═══ RIGHT: Conversation ═══ */}
-      <div className="w-[340px] shrink-0 flex flex-col border-l border-border bg-gradient-to-b from-background via-card/80 to-background">
-        <div className="px-4 py-2.5 border-b border-border">
-          <span className="text-sm font-semibold">Conversation</span>
+      <div className="w-[320px] shrink-0 flex flex-col border-l border-border/60 bg-white/70 dark:bg-card/80 backdrop-blur-sm">
+        {/* Panel header */}
+        <div className="px-4 py-3 border-b border-border/50 bg-white/80 dark:bg-card shrink-0">
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Conversation</span>
         </div>
+
+        {/* Messages */}
         <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3">
           <AnimatePresence>
             {transcripts.length === 0 && (
-              <motion.p
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="text-xs text-muted-foreground italic text-center py-4"
+                className="flex flex-col items-center justify-center py-10 gap-2"
               >
-                Speak or type — the conversation will appear here.
-              </motion.p>
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Send className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+                  Speak or type<br />the conversation will appear here.
+                </p>
+              </motion.div>
             )}
             {transcripts.map((t) => (
               <motion.div
                 key={t.id}
-                initial={{ opacity: 0, y: 6 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
                 className={cn(
-                  "rounded-2xl px-3 py-2 text-[13px]",
-                  t.role === "user"
-                    ? "ml-6 bg-primary text-primary-foreground rounded-tr-sm"
-                    : "mr-6 bg-secondary/80 rounded-tl-sm border border-border"
+                  "flex flex-col gap-0.5",
+                  t.role === "user" ? "items-end" : "items-start"
                 )}
               >
-                <span className="text-[9px] font-semibold opacity-70 uppercase">
+                <span className="text-[9px] font-bold uppercase tracking-widest px-1 text-muted-foreground/60">
                   {t.role === "agent" ? "Agent" : "You"}
                 </span>
-                <p className="mt-0.5 leading-relaxed">{t.text}</p>
+                <div className={cn(
+                  "rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed max-w-[92%] shadow-sm",
+                  t.role === "user"
+                    ? "bg-primary text-primary-foreground rounded-tr-sm"
+                    : "bg-white dark:bg-card border border-border/60 text-foreground rounded-tl-sm"
+                )}>
+                  {t.text}
+                </div>
               </motion.div>
             ))}
           </AnimatePresence>
         </div>
+
         {/* Text input */}
-        <div className="border-t border-border px-3 py-2 flex items-center gap-2 bg-background/80">
+        <div className="border-t border-border/50 px-3 py-3 flex items-center gap-2 bg-white/90 dark:bg-card shrink-0">
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            placeholder="Type or paste a YouTube link…"
+            placeholder="Type a message…"
             disabled={discoveryStatus === "running"}
-            className="flex-1 text-xs px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 text-xs px-3 py-2 rounded-xl border border-input bg-slate-50 dark:bg-background focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 transition-shadow focus:shadow-sm"
           />
           <Button
             size="icon"
-            className="h-7 w-7"
+            className="h-8 w-8 rounded-xl shrink-0"
             disabled={sendingText || !inputText.trim() || discoveryStatus === "running"}
             onClick={() => void handleSendText()}
           >
@@ -690,14 +794,18 @@ export default function VoicePlanView({ initialQuery, initialMessage, onBack }: 
   }
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
-      {/* Top bar */}
-      <div className="h-10 border-b border-border flex items-center px-4 gap-3 shrink-0 bg-card/50">
-        <Button variant="ghost" size="sm" onClick={onBack} className="h-7 px-2 text-muted-foreground">
-          Back
-        </Button>
-        <div className="h-4 w-px bg-border" />
-        <p className="text-sm font-medium truncate">Plan your trip</p>
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden bg-slate-50/40 dark:bg-background">
+      {/* Top bar — elevated glass header */}
+      <div className="h-12 border-b border-border/50 flex items-center px-4 gap-3 shrink-0 bg-white/90 dark:bg-card/90 backdrop-blur-sm shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+        <button
+          onClick={onBack}
+          className="flex items-center justify-center h-7 w-7 rounded-lg bg-transparent hover:bg-slate-100 dark:hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+          aria-label="Go back"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <div className="h-4 w-px bg-border/60" />
+        <p className="text-sm font-semibold tracking-tight text-foreground">Plan your trip</p>
       </div>
       {/* Main content — FIXED, no page scroll */}
       <div className="flex-1 min-h-0">

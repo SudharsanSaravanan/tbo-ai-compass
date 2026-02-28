@@ -18,47 +18,71 @@ interface VideoCardProps {
 export default function VideoCard({ video, label }: VideoCardProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-border bg-card/60 overflow-hidden shadow-sm"
+      transition={{ duration: 0.35 }}
+      className="px-6 py-6"
     >
       {label && (
-        <div className="px-3 py-1.5 bg-primary/5 border-b border-border">
-          <span className="text-[10px] font-semibold text-primary uppercase tracking-wide">{label}</span>
-        </div>
+        <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-4">
+          {label}
+        </p>
       )}
-      <a href={video.url} target="_blank" rel="noreferrer" className="block group">
-        <div className="relative">
-          <img
-            src={video.thumbnail}
-            alt={video.title}
-            className="w-full h-[140px] object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`;
-            }}
-          />
-          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
-              <Play className="h-5 w-5 text-red-600 ml-0.5" fill="currentColor" />
+
+      <a
+        href={video.url}
+        target="_blank"
+        rel="noreferrer"
+        className="group block rounded-2xl border border-border/40 bg-white/70 backdrop-blur-md shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden"
+      >
+        <div className="flex gap-6 p-5">
+          {/* Thumbnail */}
+          <div className="relative w-[200px] aspect-video rounded-xl overflow-hidden shrink-0">
+            <img
+              src={video.thumbnail}
+              alt={video.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`;
+              }}
+            />
+            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg">
+                <Play className="h-5 w-5 text-red-600 ml-0.5" fill="currentColor" />
+              </div>
+            </div>
+          </div>
+
+          {/* Info */}
+          <div className="flex flex-col justify-between flex-1 min-w-0">
+            <div>
+              <p className="text-lg font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                {video.title}
+              </p>
+
+              {video.channel && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {video.channel}
+                </p>
+              )}
+
+              {video.transcript_summary && (
+                <p className="text-sm text-muted-foreground/80 mt-3 leading-relaxed line-clamp-3">
+                  {video.transcript_summary}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <span className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-primary px-4 py-2 rounded-full shadow-sm group-hover:shadow-md transition">
+                <Play className="h-3.5 w-3.5" fill="currentColor" />
+                Watch Video
+              </span>
             </div>
           </div>
         </div>
-        <div className="px-3 py-2">
-          <p className="text-xs font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors">
-            {video.title}
-          </p>
-          {video.channel && (
-            <p className="text-[10px] text-muted-foreground mt-0.5">{video.channel}</p>
-          )}
-        </div>
       </a>
-      {video.transcript_summary && (
-        <div className="px-3 pb-2">
-          <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-3">
-            {video.transcript_summary}
-          </p>
-        </div>
-      )}
     </motion.div>
   );
 }
@@ -76,20 +100,28 @@ export function SmallVideoCard({ video_id, title, url, thumbnail }: SmallVideoCa
       href={url}
       target="_blank"
       rel="noreferrer"
-      className="flex items-center gap-2 rounded-lg border border-border bg-card/40 p-1.5 hover:bg-accent/30 transition-colors"
+      className="group flex items-center gap-4 rounded-2xl border border-border/40 bg-white/60 backdrop-blur-sm p-3 hover:shadow-md hover:border-primary/30 transition-all"
     >
-      <img
-        src={thumbnail}
-        alt={title}
-        className="w-16 h-10 rounded object-cover shrink-0"
-        onError={(e) => {
-          (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${video_id}/default.jpg`;
-        }}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-medium text-foreground line-clamp-2">{title}</p>
+      <div className="relative w-20 aspect-video rounded-lg overflow-hidden shrink-0">
+        <img
+          src={thumbnail}
+          alt={title}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              `https://img.youtube.com/vi/${video_id}/default.jpg`;
+          }}
+        />
       </div>
-      <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+          {title}
+        </p>
+      </div>
+
+      <ExternalLink className="h-4 w-4 text-muted-foreground/60 group-hover:text-primary transition-colors" />
     </a>
   );
 }
+

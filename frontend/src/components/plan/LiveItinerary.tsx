@@ -1,207 +1,148 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Utensils, Camera, Bus, Clock, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useMemo } from "react";
+import { MapContainer, TileLayer, Marker, Polyline } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-interface ItineraryItem {
-  time: string;
-  title: string;
-  type: "place" | "food" | "transport" | "experience";
-  note?: string;
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
+
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
+
+const greenIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+  shadowUrl: markerShadow,
+  iconSize: [32, 52],
+  iconAnchor: [16, 52],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+const redIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+  shadowUrl: markerShadow,
+  iconSize: [32, 52],
+  iconAnchor: [16, 52],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+export interface LocationPoint {
+  name: string;
+  lat: number;
+  lng: number;
 }
 
-interface ItineraryDay {
-  day: number;
-  title: string;
-  items: ItineraryItem[];
+interface TripMapProps {
+  origin?: LocationPoint | null;
+  destination?: LocationPoint | null;
 }
 
-interface LiveItineraryProps {
-  currentStep: number;
-  totalSteps: number;
-  destination: string;
-}
+export default function TripMap({ origin, destination }: TripMapProps) {
+  const center = useMemo<[number, number]>(() => {
+    const pts: [number, number][] = [];
+    if (origin) pts.push([origin.lat, origin.lng]);
+    if (destination) pts.push([destination.lat, destination.lng]);
+    if (pts.length === 0) return [20.5937, 78.9629];
+    const lat = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+    const lng = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    return [lat, lng];
+  }, [origin, destination]);
 
-const MOCK_ITINERARY: ItineraryDay[] = [
-  {
-    day: 1,
-    title: "Arrival & First Impressions",
-    items: [
-      { time: "10:00 AM", title: "Arrive & hotel check-in", type: "transport" },
-      { time: "12:30 PM", title: "Local welcome lunch", type: "food", note: "Traditional cuisine" },
-      { time: "3:00 PM", title: "Walking tour of old town", type: "place" },
-      { time: "7:00 PM", title: "Sunset viewpoint visit", type: "experience" },
-    ],
-  },
-  {
-    day: 2,
-    title: "Culture & Exploration",
-    items: [
-      { time: "8:30 AM", title: "Breakfast at local café", type: "food" },
-      { time: "10:00 AM", title: "Museum & heritage site", type: "place" },
-      { time: "1:00 PM", title: "Street food tour", type: "food", note: "Must-try local dishes" },
-      { time: "4:00 PM", title: "Market & shopping district", type: "experience" },
-    ],
-  },
-  {
-    day: 3,
-    title: "Adventure Day",
-    items: [
-      { time: "7:00 AM", title: "Sunrise trek / nature hike", type: "experience" },
-      { time: "12:00 PM", title: "Scenic lunch spot", type: "food" },
-      { time: "2:30 PM", title: "Water activity / adventure sport", type: "experience" },
-      { time: "6:00 PM", title: "Farewell dinner", type: "food", note: "Fine dining experience" },
-    ],
-  },
-];
+  const zoom = useMemo(() => {
+    if (!origin || !destination) return 6;
+    const d =
+      Math.abs(origin.lat - destination.lat) +
+      Math.abs(origin.lng - destination.lng);
+    if (d > 15) return 4;
+    if (d > 5) return 5;
+    return 6;
+  }, [origin, destination]);
 
-const typeIcon = {
-  place: <MapPin className="h-3.5 w-3.5" />,
-  food: <Utensils className="h-3.5 w-3.5" />,
-  transport: <Bus className="h-3.5 w-3.5" />,
-  experience: <Camera className="h-3.5 w-3.5" />,
-};
-
-const typeColor = {
-  place: "text-primary bg-primary/10",
-  food: "text-orange-600 bg-orange-500/10 dark:text-orange-400 dark:bg-orange-500/15",
-  transport: "text-muted-foreground bg-secondary",
-  experience: "text-emerald-600 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-500/15",
-};
-
-export default function LiveItinerary({
-  currentStep,
-  totalSteps,
-  destination,
-}: LiveItineraryProps) {
-  const [visibleDays, setVisibleDays] = useState(0);
-  const [version, setVersion] = useState(0);
-
-  useEffect(() => {
-    if (currentStep >= 3 && visibleDays === 0) {
-      setVersion(1);
-      setVisibleDays(1);
-    }
-    if (currentStep >= 4 && visibleDays < 2) {
-      setVisibleDays(2);
-    }
-    if (currentStep >= totalSteps) {
-      setTimeout(() => {
-        setVisibleDays(3);
-        setVersion(2);
-      }, 2500);
-    }
-  }, [currentStep, totalSteps]);
-
-  const showSkeleton = currentStep < 3;
+  const polyline = useMemo<[number, number][]>(() => {
+    const pts: [number, number][] = [];
+    if (origin) pts.push([origin.lat, origin.lng]);
+    if (destination) pts.push([destination.lat, destination.lng]);
+    return pts;
+  }, [origin, destination]);
 
   return (
-    <div className="flex flex-col h-full bg-card/30 border-r border-border">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Live Itinerary</span>
-        </div>
-        {version > 0 && (
-          <motion.span
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary"
-          >
-            Draft v{version}
-          </motion.span>
-        )}
-      </div>
+    <div className="w-full flex justify-center mt-10">
+      <div className="w-full max-w-6xl">
 
-      <div className="flex-1 overflow-y-auto px-4 py-5">
+        {/* Section Header */}
+        <div className="mb-8 flex flex-col gap-3">
 
-        {/* Skeleton Loading State */}
-        {showSkeleton && (
-          <div className="space-y-6 py-2">
-            <div className="text-xs text-muted-foreground text-center py-10 italic">
-              Answer a few more questions to generate your personalized itinerary...
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">
+            Route Overview
+          </h2>
+
+          <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
+            Explore your travel path visually with an interactive map view of your journey.
+          </p>
+
+          {(origin && destination) && (
+            <div className="mt-4 inline-flex items-center gap-3 px-6 py-3 rounded-full bg-primary/10 text-primary font-semibold text-base shadow-sm w-fit">
+              <span className="text-foreground font-semibold">
+                {origin.name}
+              </span>
+              <span className="text-primary text-lg">→</span>
+              <span className="text-foreground font-semibold">
+                {destination.name}
+              </span>
             </div>
+          )}
+        </div>
 
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="space-y-3">
-                {/* Day header skeleton */}
-                <div className="flex items-center gap-2.5">
-                  <div className="h-5 w-16 bg-gray-300/50 rounded-full" />
-                  <div className="h-4 w-36 bg-gray-300/40 rounded" />
-                </div>
+        {/* Premium Map Card */}
+        <div className="relative h-[500px] rounded-3xl overflow-hidden shadow-2xl border border-border/30 bg-white">
 
-                {/* Items skeleton */}
-                <div className="space-y-3 pl-2 border-l-2 border-border/40 ml-1">
-                  <div className="h-11 w-full bg-gray-300/50 rounded-lg" />
-                  <div className="h-11 w-full bg-gray-300/50 rounded-lg" />
-                  <div className="h-11 w-5/6 bg-gray-300/50 rounded-lg" />
-                  <div className="h-11 w-3/4 bg-gray-300/45 rounded-lg" />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+          <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-white/85 to-transparent z-20 pointer-events-none" />
 
-        {/* Real Itinerary Content */}
-        {!showSkeleton && (
-          <AnimatePresence mode="popLayout">
-            {MOCK_ITINERARY.slice(0, visibleDays).map((day, dayIndex) => (
-              <motion.div
-                key={day.day}
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.5, delay: dayIndex * 0.15 }}
-                className="mb-7"
-              >
-                <div className="flex items-center gap-2.5 mb-3">
-                  <span className="text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
-                    Day {day.day}
-                  </span>
-                  <span className="text-sm font-medium text-foreground">{day.title}</span>
-                </div>
+          <MapContainer
+            center={center}
+            zoom={zoom}
+            scrollWheelZoom={false}
+            className="h-full w-full z-0"
+            key={`${center[0]}-${center[1]}-${zoom}`}
+          >
+            <TileLayer
+              attribution="© Mapbox © OpenStreetMap"
+              url={`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`}
+              tileSize={512}
+              zoomOffset={-1}
+            />
 
-                <div className="space-y-2 pl-2 border-l-2 border-border/60 ml-1">
-                  {day.items.map((item, itemIndex) => (
-                    <motion.div
-                      key={itemIndex}
-                      initial={{ opacity: 0, x: -12 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        delay: dayIndex * 0.15 + itemIndex * 0.08 + 0.3,
-                        duration: 0.4,
-                      }}
-                      className="flex items-start gap-3 pl-3 py-2 rounded-lg hover:bg-accent/40 transition-colors"
-                    >
-                      <div
-                        className={cn(
-                          "h-7 w-7 rounded-md flex items-center justify-center shrink-0 mt-0.5",
-                          typeColor[item.type]
-                        )}
-                      >
-                        {typeIcon[item.type]}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground font-medium">
-                            {item.time}
-                          </span>
-                        </div>
-                        <p className="text-sm font-medium text-foreground">{item.title}</p>
-                        {item.note && (
-                          <p className="text-xs text-muted-foreground mt-1">{item.note}</p>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        )}
+            {origin && (
+              <Marker position={[origin.lat, origin.lng]} icon={greenIcon} />
+            )}
+
+            {destination && (
+              <Marker position={[destination.lat, destination.lng]} icon={redIcon} />
+            )}
+
+            {polyline.length === 2 && (
+              <Polyline
+                positions={polyline}
+                pathOptions={{
+                  color: "#6366f1",
+                  weight: 6,
+                  opacity: 0.9,
+                }}
+              />
+            )}
+          </MapContainer>
+
+          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+        </div>
+
       </div>
     </div>
   );

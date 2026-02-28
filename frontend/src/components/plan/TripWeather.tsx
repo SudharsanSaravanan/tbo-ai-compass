@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cloud, Droplets } from "lucide-react";
+import { Cloud, Droplets, Wind } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type DailyWeather, fetchWeatherForDates, weatherIcon } from "@/lib/weather";
 
@@ -28,14 +28,14 @@ export default function TripWeather({ lat, lng, startDate, endDate, destinationN
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
+      <div className="space-y-4">
         <div className="flex items-center gap-2">
           <Cloud className="h-4 w-4 text-primary" />
-          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-40" />
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 rounded-lg" />
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
       </div>
@@ -45,30 +45,51 @@ export default function TripWeather({ lat, lng, startDate, endDate, destinationN
   if (error || days.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border bg-card/50 p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Cloud className="h-4 w-4 text-primary" />
-        <span className="text-xs font-semibold text-foreground">Weather in {destinationName}</span>
+    <div className="mt-10 rounded-2xl border border-border/40 bg-white/70 backdrop-blur-md p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <Cloud className="h-5 w-5 text-primary" />
+          <span className="text-lg font-semibold text-foreground">
+            Weather in {destinationName}
+          </span>
+        </div>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {days.slice(0, 6).map((d) => {
           const dt = new Date(d.date + "T00:00:00");
           const dayName = dt.toLocaleDateString("en-US", { weekday: "short" });
           const dayNum = dt.getDate();
+          const mon = dt.toLocaleDateString("en-US", { month: "short" });
+
           return (
             <div
               key={d.date}
-              className="bg-accent/30 border rounded-lg p-2 text-center transition-colors hover:bg-accent/50"
+              className="group rounded-xl bg-gradient-to-br from-white to-slate-50 border border-border/30 p-4 text-center hover:shadow-md transition-all"
             >
-              <p className="text-[10px] text-muted-foreground">{dayName} {dayNum}</p>
-              <p className="text-lg leading-none my-1">{weatherIcon(d.weatherCode)}</p>
-              <p className="text-[11px] font-semibold">
-                {Math.round(d.tempMax)}° / {Math.round(d.tempMin)}°
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {dayName}
               </p>
+              <p className="text-xs text-muted-foreground/70 mb-2">
+                {mon} {dayNum}
+              </p>
+
+              <div className="text-3xl mb-2">
+                {weatherIcon(d.weatherCode)}
+              </div>
+
+              <div className="text-xl font-bold text-foreground tabular-nums">
+                {Math.round(d.tempMax)}°
+              </div>
+
+              <div className="text-sm text-muted-foreground tabular-nums">
+                {Math.round(d.tempMin)}°
+              </div>
+
               {d.precipitationProbability > 20 && (
-                <div className="flex items-center justify-center gap-0.5 mt-0.5 text-[10px] text-blue-500">
-                  <Droplets className="h-2.5 w-2.5" />
-                  <span>{d.precipitationProbability}%</span>
+                <div className="mt-2 flex items-center justify-center gap-1 text-xs text-blue-500 font-medium">
+                  <Droplets className="h-3 w-3" />
+                  {d.precipitationProbability}%
                 </div>
               )}
             </div>
@@ -78,3 +99,4 @@ export default function TripWeather({ lat, lng, startDate, endDate, destinationN
     </div>
   );
 }
+
