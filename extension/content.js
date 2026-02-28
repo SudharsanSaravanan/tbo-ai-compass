@@ -22,30 +22,46 @@
         return null;
     }
 
+    /**
+     * Safely send a message to the background service worker.
+     * Guards against:
+     *  - Extension context invalidated (e.g. extension reloaded mid-session)
+     *  - No receiving end (background not yet active / no listener for this action)
+     *  - Any other runtime rejection
+     */
+    function safeNotify(payload) {
+        // chrome.runtime may not exist if the extension context is invalidated
+        if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) return;
+        try {
+            chrome.runtime.sendMessage(payload).catch(() => {
+                // Silently ignore: popup not open or SW not active — this is expected.
+            });
+        } catch (_) {
+            // Synchronous throw if context is invalidated; ignore.
+        }
+    }
+
     // ── Watch for URL changes via YouTube's yt-navigate-finish event ──
     document.addEventListener('yt-navigate-finish', () => {
         const videoId = getVideoId(location.href);
         if (videoId) {
-            // Notify extension that a new video is active
-            chrome.runtime.sendMessage({
+            safeNotify({
                 action: 'youtubeNavigation',
                 videoId: videoId,
                 url: location.href,
                 title: document.title,
-            }).catch(() => {
-                // Extension popup may not be open – silence the error
             });
         }
     });
 
-    // Notify on initial load as well
+    // ── Notify on initial load as well ──
     const initVideoId = getVideoId(location.href);
     if (initVideoId) {
-        chrome.runtime.sendMessage({
+        safeNotify({
             action: 'youtubeNavigation',
             videoId: initVideoId,
             url: location.href,
             title: document.title,
-        }).catch(() => { });
+        });
     }
 })();

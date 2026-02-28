@@ -1,6 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Calendar as CalendarIcon, Users, Clock, Search, ChevronDown, Navigation } from "lucide-react";
+import {
+  MapPin,
+  Calendar as CalendarIcon,
+  Users,
+  Search,
+  ChevronDown,
+  Navigation,
+  Youtube,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { format } from "date-fns";
 import { ScaleLoader } from "react-spinners";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,18 +21,29 @@ import { Calendar } from "@/components/ui/calendar";
 import TripSearchOverlay from "@/components/TripSearchOverlay";
 import { cn } from "@/lib/utils";
 
-const recentSearches = [
-  "7 days in Bali for a couple, mid-budget",
-  "Family trip to Tokyo with kids, 10 days",
-  "Weekend getaway to Swiss Alps, luxury",
-];
+const STORAGE_KEY = "tbo_travel_plans";
 
-const suggestions = [
-  { icon: "🏖️", label: "Beach Escape", query: "5-day beach vacation in Maldives" },
-  { icon: "🏔️", label: "Mountain Trek", query: "Hiking trip to Patagonia for adventurers" },
-  { icon: "🍜", label: "Food Tour", query: "Street food tour across Bangkok and Chiang Mai" },
-  { icon: "🏛️", label: "Cultural Journey", query: "2-week cultural tour through Italy" },
-];
+interface SavedPlan {
+  id: string;
+  planName: string;
+  note?: string;
+  url: string;
+  videoId: string;
+  title: string;
+  savedAt: string;
+  thumbnail: string;
+}
+
+function readPlansFromStorage(): SavedPlan[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 let siteLoaded = false;
 
@@ -35,6 +56,7 @@ export default function Index() {
   const [children, setChildren] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(!siteLoaded);
+  const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -47,10 +69,36 @@ export default function Index() {
     }
   }, []);
 
+  // Read plans on mount and listen for storage changes (pushed by extension background)
+  useEffect(() => {
+    setSavedPlans(readPlansFromStorage());
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY || e.key === null) {
+        setSavedPlans(readPlansFromStorage());
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   const handleSearch = () => {
     const q = query.trim() || "Trip";
     const o = origin.trim();
     navigate("/plan", { state: { query: q, origin: o, date: travelDate, adults, children } });
+  };
+
+  const handleGenerateItinerary = (plan: SavedPlan) => {
+    const q = plan.planName || plan.title || "Travel Plan";
+    navigate("/intent", { state: { query: q, youtubeUrl: plan.url } });
+  };
+
+  const handleRemovePlan = (planId: string) => {
+    const updated = savedPlans.filter((p) => p.id !== planId);
+    setSavedPlans(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch { /* ignore */ }
   };
 
   if (loading) {
@@ -66,11 +114,11 @@ export default function Index() {
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] pb-12">
-      {/* Hero Section – aligned with content width */}
+      {/* ── Hero Section ── */}
       <section className="relative pt-6 md:pt-8 pb-4 md:pb-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative h-[65vh] min-h-[480px] md:h-[65vh] md:min-h-[440px] lg:min-h-[520px] rounded-3xl lg:rounded-4xl overflow-hidden shadow-2xl">
-            {/* Mobile: Static Image Background */}
+            {/* Mobile: Static Image */}
             <div className="absolute inset-0 md:hidden">
               <img
                 src={heroImage}
@@ -79,26 +127,10 @@ export default function Index() {
               />
             </div>
 
-            {/* Desktop: YouTube Video Background */}
-            <div className="absolute inset-0 overflow-hidden hidden md:block">
-              {/* <iframe
-                className="
-                  absolute top-1/2 left-1/2 
-                  -translate-x-1/2 -translate-y-1/2 
-                  w-[160%] lg:w-[140%] xl:w-[120%] 
-                  h-[200%] 
-                  min-w-full min-h-full 
-                  pointer-events-none
-                "
-                src="https://www.youtube.com/embed/J6z3Q-5bpvc?autoplay=1&enablejsapi=1&mute=1&controls=0&loop=1&playlist=J6z3Q-5bpvc"
-                title="Travel background video"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              /> */}
-            </div>
+            {/* Desktop: placeholder for video bg */}
+            <div className="absolute inset-0 overflow-hidden hidden md:block" />
 
-            {/* Darker gradient overlay for better text readability */}
+            {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/30 to-black/65" />
 
             {/* Hero Content */}
@@ -106,15 +138,14 @@ export default function Index() {
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold font-heading text-white mb-5 md:mb-6 tracking-tight drop-shadow-2xl">
                 Trip Planning, Simplified
               </h1>
-
               <p className="text-white/90 text-base sm:text-base md:text-lg lg:text-xl max-w-3xl mb-8 md:mb-12 drop-shadow-lg">
                 AI-crafted itineraries with transport, stays, food, and experiences — tailored to your budget, dates,
                 and travel style.
               </p>
 
-              {/* Search Bar – TourRadar / modern style */}
+              {/* Search Bar */}
               <div className="bg-white/95 backdrop-blur-md rounded-full shadow-2xl p-1.5 sm:p-2 flex items-center w-full max-w-5xl">
-                {/* Origin Input */}
+                {/* Origin */}
                 <div className="flex-1 flex items-center gap-3 sm:gap-4 px-5 sm:px-6 py-3 sm:py-4 border-r border-gray-200">
                   <Navigation className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground shrink-0" />
                   <input
@@ -125,6 +156,7 @@ export default function Index() {
                   />
                 </div>
 
+                {/* Destination */}
                 <div className="flex-1 flex items-center gap-3 sm:gap-4 px-5 sm:px-6 py-3 sm:py-4 border-r border-gray-200">
                   <MapPin className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground shrink-0" />
                   <input
@@ -137,6 +169,7 @@ export default function Index() {
                   />
                 </div>
 
+                {/* Date */}
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="hidden md:flex items-center gap-3 px-6 py-4 border-r border-gray-200 text-base whitespace-nowrap hover:bg-gray-50 transition-colors cursor-pointer">
@@ -158,12 +191,14 @@ export default function Index() {
                   </PopoverContent>
                 </Popover>
 
+                {/* Guests */}
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="hidden lg:flex items-center gap-3 px-6 py-4 text-base whitespace-nowrap hover:bg-gray-50 transition-colors cursor-pointer">
                       <Users className="h-5 w-5 shrink-0 text-muted-foreground" />
                       <span className="text-gray-900">
-                        {adults} Adult{adults !== 1 ? "s" : ""}{children > 0 ? `, ${children} Child${children !== 1 ? "ren" : ""}` : ""}
+                        {adults} Adult{adults !== 1 ? "s" : ""}
+                        {children > 0 ? `, ${children} Child${children !== 1 ? "ren" : ""}` : ""}
                       </span>
                       <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     </button>
@@ -211,54 +246,128 @@ export default function Index() {
                   Search
                 </Button>
               </div>
-
             </div>
           </div>
         </div>
       </section>
 
-      {/* Quick Suggestions + Recent Searches */}
+      {/* ── Saved Travel Videos ── */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-12">
-        {/* Suggestion Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-12 md:mb-16">
-          {suggestions.map((s) => (
-            <button
-              key={s.label}
-              onClick={() => {
-                setQuery(s.query);
-                navigate("/intent", { state: { query: s.query } });
-              }}
-              className="group bg-card border rounded-2xl p-5 md:p-6 text-left hover:shadow-xl hover:scale-[1.02] transition-all duration-300"
-            >
-              <span className="text-3xl md:text-4xl mb-3 md:mb-4 block">{s.icon}</span>
-              <p className="font-semibold text-lg md:text-xl mb-1">{s.label}</p>
-              <p className="text-sm md:text-base text-muted-foreground line-clamp-2">{s.query}</p>
-            </button>
-          ))}
-        </div>
-
-        {/* Recent Searches */}
-        <div>
-          <h2 className="text-lg font-semibold text-muted-foreground mb-4 md:mb-5 flex items-center gap-2">
-            <Clock className="h-5 w-5" /> Recent Searches
+        <div className="flex items-center justify-between mb-6 md:mb-8">
+          <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2.5">
+            {/* <Youtube className="h-6 w-6 text-red-500" /> */}
+            Your Saved Travel Videos
           </h2>
-
-          <div className="space-y-3 md:space-y-4">
-            {recentSearches.map((s) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setQuery(s);
-                  navigate("/intent", { state: { query: s } });
-                }}
-                className="w-full flex items-center gap-4 px-5 py-4 md:px-6 md:py-5 bg-card border rounded-2xl text-left hover:bg-accent hover:shadow-md transition-all duration-200"
-              >
-                <MapPin className="h-5 w-5 text-muted-foreground shrink-0" />
-                <span className="text-base md:text-lg truncate">{s}</span>
-              </button>
-            ))}
-          </div>
+          {savedPlans.length > 0 && (
+            <span className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full font-medium">
+              {savedPlans.length} saved
+            </span>
+          )}
         </div>
+
+        {savedPlans.length === 0 ? (
+          /* Empty state */
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="flex flex-col items-center justify-center py-16 md:py-24 rounded-3xl border-2 border-dashed border-border bg-card/50"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-950/30 flex items-center justify-center mb-4">
+              <Youtube className="h-8 w-8 text-red-500" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">No saved travel videos yet</h3>
+            <p className="text-muted-foreground text-sm text-center max-w-sm leading-relaxed">
+              Use the <strong>TBO AI Compass</strong> browser extension to save YouTube travel videos.
+              They'll appear here so you can instantly generate a personalized itinerary.
+            </p>
+            <a
+              href="https://www.youtube.com/results?search_query=travel+destinations"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+            >
+              <Youtube className="h-4 w-4 text-red-500" />
+              Explore travel videos on YouTube
+            </a>
+          </motion.div>
+        ) : (
+          /* Video cards grid */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 md:gap-6">
+            <AnimatePresence>
+              {savedPlans.map((plan, i) => (
+                <motion.div
+                  key={plan.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3, delay: i * 0.05 }}
+                  className="group bg-card border rounded-2xl overflow-hidden hover:shadow-xl hover:scale-[1.02] transition-all duration-300 flex flex-col"
+                >
+                  {/* Thumbnail */}
+                  <div className="relative aspect-video bg-muted overflow-hidden">
+                    <img
+                      src={plan.thumbnail || `https://img.youtube.com/vi/${plan.videoId}/mqdefault.jpg`}
+                      alt={plan.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${plan.videoId}/default.jpg`;
+                      }}
+                    />
+                    {/* Play overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/30">
+                      <a
+                        href={plan.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center shadow-lg hover:bg-red-700 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <svg className="w-5 h-5 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </a>
+                    </div>
+                    {/* Date badge */}
+                    <div className="absolute top-2 right-2">
+                      <span className="text-[10px] font-medium bg-black/60 text-white px-2 py-0.5 rounded-full backdrop-blur-sm">
+                        {new Date(plan.savedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                    {/* Remove button */}
+                    <button
+                      onClick={() => handleRemovePlan(plan.id)}
+                      className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                      title="Remove"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Card body */}
+                  <div className="p-4 flex flex-col flex-1">
+                    <p className="font-semibold text-sm md:text-base line-clamp-2 mb-1 leading-snug">
+                      {plan.planName || plan.title}
+                    </p>
+                    {plan.note && (
+                      <p className="text-xs text-muted-foreground line-clamp-1 mb-3">{plan.note}</p>
+                    )}
+                    <div className="mt-auto pt-3">
+                      <Button
+                        onClick={() => handleGenerateItinerary(plan)}
+                        size="sm"
+                        className="w-full rounded-xl bg-primary hover:bg-primary/90 text-sm font-medium gap-1.5"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Generate Itinerary
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </section>
 
       {showOrb && (
