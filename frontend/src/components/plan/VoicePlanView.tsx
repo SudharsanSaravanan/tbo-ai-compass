@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
+import { type DailyWeather, fetchWeatherForDates } from "@/lib/weather";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -22,7 +23,28 @@ import {
   Loader2,
   Youtube,
   ArrowLeft,
+  Sun,
+  CloudSun,
+  Cloud,
+  Cloudy,
+  CloudRain,
+  CloudSnow,
+  Wind,
+  Zap,
 } from "lucide-react";
+
+/** Map a WMO weather code to a coloured Lucide icon element */
+function wmoIcon(code: number): React.ReactNode {
+  if (code === 0) return <Sun className="h-3.5 w-3.5 text-yellow-500" />;
+  if (code <= 2) return <CloudSun className="h-3.5 w-3.5 text-yellow-400" />;
+  if (code === 3) return <Cloudy className="h-3.5 w-3.5 text-slate-400" />;
+  if (code <= 48) return <Cloud className="h-3.5 w-3.5 text-slate-400" />;  // fog
+  if (code <= 67) return <CloudRain className="h-3.5 w-3.5 text-blue-400" />;  // drizzle / rain
+  if (code <= 77) return <CloudSnow className="h-3.5 w-3.5 text-sky-300" />;   // snow
+  if (code <= 82) return <CloudRain className="h-3.5 w-3.5 text-blue-500" />;  // showers
+  if (code <= 99) return <Zap className="h-3.5 w-3.5 text-violet-500" />;      // thunderstorm
+  return <Wind className="h-3.5 w-3.5 text-teal-400" />;
+}
 import { Button } from "@/components/ui/button";
 import { LiveWaveform } from "@/components/ui/live-waveform";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,7 +52,6 @@ import { cn } from "@/lib/utils";
 
 import TripMap, { type LocationPoint } from "./TripMap";
 import TripCalendar from "./TripCalendar";
-import TripWeather from "./TripWeather";
 import VideoCard, { SmallVideoCard, type VideoInfo } from "./VideoCard";
 
 const APP_DATA_TOPIC = "tbo-app-data";
@@ -149,6 +170,7 @@ function VoiceRoomContent({
   const [connected, setConnected] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const [weatherByDate, setWeatherByDate] = useState<Record<string, DailyWeather>>({});
 
   useEffect(() => {
     setConnected(room.state === "connected");
@@ -288,6 +310,23 @@ function VoiceRoomContent({
   const hasMap = !!(locations.origin || locations.destination);
   const hasDates = !!(dates?.start_date);
   const hasWeather = hasDates && !!locations.destination;
+
+  // Fetch weather when destination + dates are available
+  useEffect(() => {
+    if (!hasWeather || !locations.destination || !dates) return;
+    fetchWeatherForDates(
+      locations.destination.lat,
+      locations.destination.lng,
+      dates.start_date,
+      dates.end_date
+    )
+      .then((days) => {
+        const map: Record<string, DailyWeather> = {};
+        days.forEach((d) => { map[d.date] = d; });
+        setWeatherByDate(map);
+      })
+      .catch(() => { /* silently ignore */ });
+  }, [hasWeather, locations.destination?.lat, locations.destination?.lng, dates?.start_date, dates?.end_date]);
 
   const typeIcon: Record<string, React.ReactNode> = {
     place: <MapPin className="h-3 w-3" />,
@@ -460,26 +499,7 @@ function VoiceRoomContent({
               </div>
             )}
 
-            {/* ── SECTION 2: Weather ── */}
-            <AnimatePresence>
-              {hasWeather && dates && locations.destination && (
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.08 }}
-                >
-                  <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-5">
-                    <TripWeather
-                      lat={locations.destination.lat}
-                      lng={locations.destination.lng}
-                      startDate={dates.start_date}
-                      endDate={dates.end_date}
-                      destinationName={locations.destination.name}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+
 
             {/* ── SECTION 3: YouTube video ── */}
             <AnimatePresence>
@@ -561,44 +581,79 @@ function VoiceRoomContent({
 
                   {/* Timeline days */}
                   <div className="space-y-7">
-                    {itinerary.days.map((d, di) => (
-                      <div key={d.day} className="relative">
-                        {/* Day pill */}
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-[10px] font-bold shrink-0 shadow-sm">
-                            {d.day}
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">{d.title}</span>
-                          {di < itinerary.days.length - 1 && (
-                            <div className="absolute left-3.5 top-7 bottom-0 w-px bg-border/70 -translate-x-1/2" />
-                          )}
-                        </div>
+                    {itinerary.days.map((d, di) => {
+                      // Compute the calendar date for this itinerary day
+                      const dayWeather = (() => {
+                        if (!dates?.start_date) return null;
+                        const base = new Date(dates.start_date + "T00:00:00");
+                        base.setDate(base.getDate() + (d.day - 1));
+                        const y = base.getFullYear();
+                        const mo = String(base.getMonth() + 1).padStart(2, "0");
+                        const dy = String(base.getDate()).padStart(2, "0");
+                        const key = `${y}-${mo}-${dy}`;
+                        return weatherByDate[key] ?? null;
+                      })();
 
-                        {/* Activity cards */}
-                        <div className="pl-10 space-y-2">
-                          {d.items.map((it, i) => (
-                            <div
-                              key={i}
-                              className={cn(
-                                "flex items-start gap-3 rounded-xl px-3 py-2.5 text-[11px] border border-transparent transition-shadow hover:shadow-sm",
-                                typeColor[it.type] || "bg-slate-50 border-slate-100"
-                              )}
-                            >
-                              <span className="mt-0.5 shrink-0 opacity-80">{typeIcon[it.type]}</span>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-baseline gap-2 flex-wrap">
-                                  <span className="font-semibold text-[10px] tabular-nums text-muted-foreground/80">{it.time}</span>
-                                  <span className="font-semibold text-foreground">{it.title}</span>
-                                </div>
-                                {it.note && (
-                                  <span className="block text-muted-foreground text-[10px] mt-0.5 leading-relaxed">{it.note}</span>
-                                )}
-                              </div>
+                      // Format date label: "Mon, 5 Mar"
+                      const dayDateLabel = (() => {
+                        if (!dates?.start_date) return null;
+                        const base = new Date(dates.start_date + "T00:00:00");
+                        base.setDate(base.getDate() + (d.day - 1));
+                        const weekday = base.toLocaleDateString("en-US", { weekday: "short" });
+                        const num = base.getDate();
+                        const mon = base.toLocaleDateString("en-US", { month: "short" });
+                        return `${weekday}, ${num} ${mon}`;
+                      })();
+
+                      return (
+                        <div key={d.day} className="relative">
+                          {/* Day pill */}
+                          <div className="flex items-center gap-2 mb-3 flex-wrap">
+                            <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-[10px] font-bold shrink-0 shadow-sm">
+                              {d.day}
                             </div>
-                          ))}
+                            {dayDateLabel && (
+                              <span className="text-[11px] text-muted-foreground font-medium">{dayDateLabel}</span>
+                            )}
+                            <span className="text-sm font-semibold text-foreground">{d.title}</span>
+                            {dayWeather && (
+                              <span className="ml-auto flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-slate-100/80 dark:bg-muted border border-border/40 rounded-full px-2.5 py-0.5">
+                                {wmoIcon(dayWeather.weatherCode)}
+                                <span className="text-foreground font-semibold">{Math.round(dayWeather.tempMax)}°</span>
+                                <span className="text-muted-foreground/70">/{Math.round(dayWeather.tempMin)}°</span>
+                              </span>
+                            )}
+                            {di < itinerary.days.length - 1 && (
+                              <div className="absolute left-3.5 top-7 bottom-0 w-px bg-border/70 -translate-x-1/2" />
+                            )}
+                          </div>
+
+                          {/* Activity cards */}
+                          <div className="pl-10 space-y-2">
+                            {d.items.map((it, i) => (
+                              <div
+                                key={i}
+                                className={cn(
+                                  "flex items-start gap-3 rounded-xl px-3 py-3 text-xs border border-transparent transition-shadow hover:shadow-sm",
+                                  typeColor[it.type] || "bg-slate-50 border-slate-100"
+                                )}
+                              >
+                                <span className="mt-0.5 shrink-0 opacity-80">{typeIcon[it.type]}</span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-baseline gap-2 flex-wrap">
+                                    <span className="font-semibold text-[11px] tabular-nums text-muted-foreground/80">{it.time}</span>
+                                    <span className="font-semibold text-foreground text-[13px]">{it.title}</span>
+                                  </div>
+                                  {it.note && (
+                                    <span className="block text-muted-foreground text-[11px] mt-0.5 leading-relaxed">{it.note}</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </motion.div>
               ) : discoveryStatus !== "idle" || transcripts.length > 4 ? (
