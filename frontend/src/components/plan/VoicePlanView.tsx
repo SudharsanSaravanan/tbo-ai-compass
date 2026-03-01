@@ -52,7 +52,9 @@ import { cn } from "@/lib/utils";
 
 import TripMap, { type LocationPoint } from "./TripMap";
 import TripCalendar from "./TripCalendar";
+import TripFoodSpots from "./TripFoodSpots";
 import VideoCard, { SmallVideoCard, type VideoInfo } from "./VideoCard";
+import { type FoodSpot } from "@/lib/tavily";
 
 const APP_DATA_TOPIC = "tbo-app-data";
 const TOKEN_API = import.meta.env.VITE_TOKEN_API || "http://localhost:8765";
@@ -171,6 +173,8 @@ function VoiceRoomContent({
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [weatherByDate, setWeatherByDate] = useState<Record<string, DailyWeather>>({});
+  const [foodSpots, setFoodSpots] = useState<FoodSpot[]>([]);
+  const [selectedFoodSpot, setSelectedFoodSpot] = useState<FoodSpot | null>(null);
 
   useEffect(() => {
     setConnected(room.state === "connected");
@@ -436,6 +440,26 @@ function VoiceRoomContent({
                         endDate={dates.end_date}
                         numDays={dates.num_days}
                       />
+                      {/* ── Food spots embedded below calendar ── */}
+                      {locations.destination && (
+                        <TripFoodSpots
+                          compact
+                          destinationName={locations.destination.name}
+                          destinationLat={locations.destination.lat}
+                          destinationLng={locations.destination.lng}
+                          selectedSpot={selectedFoodSpot}
+                          onSelectSpot={setSelectedFoodSpot}
+                          onSpotsLoaded={setFoodSpots}
+                          itineraryDays={
+                            itinerary?.days.map((d) => ({
+                              day: d.day,
+                              placeNames: d.items
+                                .filter((it) => it.type === "place")
+                                .map((it) => it.title),
+                            })) ?? []
+                          }
+                        />
+                      )}
                     </div>
                   )}
                   {/* Calendar skeleton */}
@@ -464,7 +488,13 @@ function VoiceRoomContent({
                         )}
                       </div>
                       <div className="rounded-xl overflow-hidden flex-1 min-h-[200px]">
-                        <TripMap origin={locations.origin} destination={locations.destination} />
+                        <TripMap
+                          origin={locations.origin}
+                          destination={locations.destination}
+                          foodSpots={foodSpots}
+                          selectedFoodSpot={selectedFoodSpot}
+                          itinerary={itinerary}
+                        />
                       </div>
                     </div>
                   )}
@@ -499,9 +529,6 @@ function VoiceRoomContent({
               </div>
             )}
 
-
-
-            {/* ── SECTION 3: YouTube video ── */}
             <AnimatePresence>
               {primaryVideo && (
                 <motion.div
