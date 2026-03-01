@@ -1,7 +1,16 @@
-// Weather Service for Trip Weaver
-// Handles smart weather logic: forecast (≤16 days) vs historical (>16 days)
+/**
+ * Weather Service — WeatherAPI.com
+ * Used by TripDashboard and WeatherDisplay components.
+ *
+ * Smart logic:
+ *   trip start ≤ 10 days away  → real forecast
+ *   trip start > 10 days away  → historical data (same dates, 1 year ago)
+ */
 
-interface WeatherDate {
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY || "";
+const WEATHER_BASE = "https://api.weatherapi.com/v1";
+
+export interface WeatherDate {
     date: string;
     tempMin: number;
     tempMax: number;
@@ -9,9 +18,10 @@ interface WeatherDate {
     icon: string;
     rainProbability?: number;
     alert?: string;
+    isHistorical?: boolean;
 }
 
-interface WeatherResponse {
+export interface WeatherResponse {
     type: "forecast" | "historical";
     city: string;
     dates: WeatherDate[];
@@ -19,299 +29,160 @@ interface WeatherResponse {
     message?: string;
 }
 
-interface GeoLocation {
-    lat: number;
-    lon: number;
-    name: string;
+function formatDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
 }
 
-const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
-const OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5";
-const OPENWEATHER_GEO_URL = "https://api.openweathermap.org/geo/1.0";
-
-/**
- * Get coordinates for a city name
- */
-async function getCityCoordinates(city: string): Promise<GeoLocation | null> {
-    try {
-        const response = await fetch(
-            `${OPENWEATHER_GEO_URL}/direct?q=${encodeURIComponent(city)}&limit=1&appid=${OPENWEATHER_API_KEY}`
-        );
-
-        if (!response.ok) {
-            console.error("Failed to get city coordinates:", response.statusText);
-            return null;
-        }
-
-        const data = await response.json();
-        if (data && data.length > 0) {
-            return {
-                lat: data[0].lat,
-                lon: data[0].lon,
-                name: data[0].name,
-            };
-        }
-
-        return null;
-    } catch (error) {
-        console.error("Error fetching city coordinates:", error);
-        return null;
-    }
-}
-
-/**
- * Fetch 16-day forecast from OpenWeather
- */
-async function getForecastWeather(
-    lat: number,
-    lon: number,
-    startDate: Date,
-    endDate: Date
-): Promise<WeatherDate[]> {
-    try {
-        // OpenWeather 16-day daily forecast endpoint
-        const response = await fetch(
-            `${OPENWEATHER_BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&cnt=16&units=metric&appid=${OPENWEATHER_API_KEY}`
-        );
-
-        if (!response.ok) {
-            console.error("Failed to fetch forecast weather:", response.statusText);
-            return [];
-        }
-
-        const data = await response.json();
-        const weatherDates: WeatherDate[] = [];
-
-        // Filter forecast to match trip dates
-        const startTime = startDate.getTime();
-        const endTime = endDate.getTime();
-
-        if (data.list && Array.isArray(data.list)) {
-            for (const day of data.list) {
-                const forecastDate = new Date(day.dt * 1000);
-                const forecastTime = forecastDate.getTime();
-
-                // Only include days within the trip date range
-                if (forecastTime >= startTime && forecastTime <= endTime) {
-                    weatherDates.push({
-                        date: forecastDate.toISOString().split("T")[0],
-                        tempMin: Math.round(day.temp.min),
-                        tempMax: Math.round(day.temp.max),
-                        condition: day.weather[0]?.main || "Unknown",
-                        icon: getWeatherIcon(day.weather[0]?.main || "Unknown"),
-                        rainProbability: day.pop ? Math.round(day.pop * 100) : undefined,
-                        alert: getWeatherAlert(day.weather[0]?.main),
-                    });
-                }
-            }
-        }
-
-        return weatherDates;
-    } catch (error) {
-        console.error("Error fetching forecast weather:", error);
-        return [];
-    }
-}
-
-/**
- * Fetch historical/climate average weather
- * Note: OpenWeather's historical API requires a paid plan.
- * For this implementation, we'll use current weather as a proxy for historical average.
- * In production, you should use the actual historical API or climate data service.
- */
-async function getHistoricalWeather(
-    lat: number,
-    lon: number,
-    startDate: Date,
-    endDate: Date
-): Promise<WeatherDate[]> {
-    try {
-        // Using current weather as a proxy for historical average
-        // In production, use: api.openweathermap.org/data/3.0/onecall/timemachine
-        const response = await fetch(
-            `${OPENWEATHER_BASE_URL}/weather?lat=${lat}&lon=${lon}&units=metric&appid=${OPENWEATHER_API_KEY}`
-        );
-
-        if (!response.ok) {
-            console.error("Failed to fetch historical weather:", response.statusText);
-            return [];
-        }
-
-        const data = await response.json();
-        const weatherDates: WeatherDate[] = [];
-
-        // Generate weather for each day in the trip range based on current conditions
-        // This is a simplified approach - ideally use actual historical API
-        const currentDate = new Date(startDate);
-        while (currentDate <= endDate) {
-            weatherDates.push({
-                date: currentDate.toISOString().split("T")[0],
-                tempMin: Math.round(data.main.temp_min),
-                tempMax: Math.round(data.main.temp_max),
-                condition: data.weather[0]?.main || "Unknown",
-                icon: getWeatherIcon(data.weather[0]?.main || "Unknown"),
-                rainProbability: data.clouds?.all || undefined,
-            });
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-
-        return weatherDates;
-    } catch (error) {
-        console.error("Error fetching historical weather:", error);
-        return [];
-    }
-}
-
-/**
- * Map weather condition to emoji icon
- */
-function getWeatherIcon(condition: string): string {
-    const iconMap: Record<string, string> = {
-        Clear: "☀️",
-        Clouds: "☁️",
-        Rain: "🌧️",
-        Drizzle: "🌦️",
-        Thunderstorm: "⛈️",
-        Snow: "❄️",
-        Mist: "🌫️",
-        Fog: "🌫️",
-        Haze: "🌫️",
-    };
-
-    return iconMap[condition] || "⛅";
-}
-
-/**
- * Determine if weather condition warrants an alert
- */
-function getWeatherAlert(condition: string): string | undefined {
-    const alertMap: Record<string, string> = {
-        Thunderstorm: "⚠️ Severe weather expected",
-        Snow: "⚠️ Snow conditions",
-        Extreme: "⚠️ Extreme weather alert",
-    };
-
-    return alertMap[condition];
-}
-
-/**
- * Calculate days difference between today and trip start date
- */
 function getDaysDifference(startDate: Date): number {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     const tripStart = new Date(startDate);
     tripStart.setHours(0, 0, 0, 0);
+    return Math.ceil((tripStart.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
 
-    const diffTime = tripStart.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+function conditionToEmoji(text: string): string {
+    const t = text.toLowerCase();
+    if (t.includes("thunder") || t.includes("storm")) return "⛈️";
+    if (t.includes("snow") || t.includes("blizzard") || t.includes("sleet")) return "❄️";
+    if (t.includes("heavy rain")) return "🌧️";
+    if (t.includes("rain") || t.includes("drizzle") || t.includes("shower")) return "🌦️";
+    if (t.includes("fog") || t.includes("mist") || t.includes("haze")) return "🌫️";
+    if (t.includes("overcast") || t.includes("cloudy")) return "☁️";
+    if (t.includes("partly cloudy") || t.includes("partly sunny")) return "⛅";
+    if (t.includes("sunny") || t.includes("clear")) return "☀️";
+    return "🌡️";
+}
 
-    return diffDays;
+async function fetchForecast(
+    city: string,
+    startDate: Date,
+    endDate: Date
+): Promise<WeatherDate[]> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysToEnd = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const days = Math.min(Math.max(daysToEnd, 1), 10);
+
+    const url = `${WEATHER_BASE}/forecast.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(city)}&days=${days}&aqi=no&alerts=no`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`WeatherAPI forecast ${resp.status}`);
+    const data = await resp.json();
+
+    const results: WeatherDate[] = [];
+    for (const fd of (data.forecast?.forecastday ?? [])) {
+        const d = fd.date as string;
+        const dDate = new Date(d + "T00:00:00");
+        if (dDate >= startDate && dDate <= endDate) {
+            const day = fd.day;
+            const condText = day.condition?.text ?? "";
+            results.push({
+                date: d,
+                tempMin: day.mintemp_c,
+                tempMax: day.maxtemp_c,
+                condition: condText,
+                icon: conditionToEmoji(condText),
+                rainProbability: day.daily_chance_of_rain ?? undefined,
+                isHistorical: false,
+            });
+        }
+    }
+    return results;
+}
+
+async function fetchHistorical(
+    city: string,
+    startDate: Date,
+    endDate: Date
+): Promise<WeatherDate[]> {
+    const results: WeatherDate[] = [];
+    const cursor = new Date(startDate);
+    const actualCursor = new Date(startDate);
+
+    // Go back 1 year for historical seasonal data
+    cursor.setFullYear(cursor.getFullYear() - 1);
+    const histEnd = new Date(endDate);
+    histEnd.setFullYear(histEnd.getFullYear() - 1);
+
+    while (cursor <= histEnd) {
+        const dt = formatDate(cursor);
+        const url = `${WEATHER_BASE}/history.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(city)}&dt=${dt}&aqi=no`;
+        try {
+            const resp = await fetch(url);
+            if (resp.ok) {
+                const data = await resp.json();
+                const fd = data.forecast?.forecastday?.[0];
+                if (fd) {
+                    const day = fd.day;
+                    const condText = day.condition?.text ?? "";
+                    results.push({
+                        date: formatDate(actualCursor),
+                        tempMin: day.mintemp_c,
+                        tempMax: day.maxtemp_c,
+                        condition: condText,
+                        icon: conditionToEmoji(condText),
+                        rainProbability: day.daily_chance_of_rain ?? undefined,
+                        isHistorical: true,
+                    });
+                }
+            }
+        } catch {
+            // skip day on fetch error
+        }
+
+        cursor.setDate(cursor.getDate() + 1);
+        actualCursor.setDate(actualCursor.getDate() + 1);
+    }
+
+    return results;
 }
 
 /**
- * Main function: Get weather for a trip
- * Automatically determines whether to use forecast or historical data
+ * Main function: fetch weather for a trip.
+ * Auto-determines forecast vs historical based on trip proximity.
  */
 export async function getWeatherForTrip(
     city: string,
     startDate: Date | string,
     endDate: Date | string
 ): Promise<WeatherResponse> {
-    // Validate API key
-    if (!OPENWEATHER_API_KEY) {
-        return {
-            type: "forecast",
-            city,
-            dates: [],
-            error: true,
-            message: "Weather API key not configured",
-        };
+    if (!WEATHER_API_KEY) {
+        return { type: "forecast", city, dates: [], error: true, message: "Weather API key not configured" };
     }
 
-    // Convert dates to Date objects if needed
-    const tripStartDate = typeof startDate === "string" ? new Date(startDate) : startDate;
-    const tripEndDate = typeof endDate === "string" ? new Date(endDate) : endDate;
+    const tripStart = typeof startDate === "string" ? new Date(startDate) : startDate;
+    const tripEnd = typeof endDate === "string" ? new Date(endDate) : endDate;
 
-    // Validate dates
-    if (isNaN(tripStartDate.getTime()) || isNaN(tripEndDate.getTime())) {
-        return {
-            type: "forecast",
-            city,
-            dates: [],
-            error: true,
-            message: "Invalid trip dates",
-        };
+    if (isNaN(tripStart.getTime()) || isNaN(tripEnd.getTime())) {
+        return { type: "forecast", city, dates: [], error: true, message: "Invalid trip dates" };
     }
+
+    const daysDiff = getDaysDifference(tripStart);
+    const useHistorical = daysDiff > 10 || daysDiff < 0;
 
     try {
-        // Step 1: Get city coordinates
-        const location = await getCityCoordinates(city);
-        if (!location) {
+        const dates = useHistorical
+            ? await fetchHistorical(city, tripStart, tripEnd)
+            : await fetchForecast(city, tripStart, tripEnd);
+
+        if (dates.length === 0) {
             return {
-                type: "forecast",
+                type: useHistorical ? "historical" : "forecast",
                 city,
-                dates: [],
-                error: true,
-                message: "City not found",
-            };
-        }
-
-        // Step 2: Determine days difference
-        const daysDiff = getDaysDifference(tripStartDate);
-
-        // Step 3: Fetch appropriate weather data
-        let weatherDates: WeatherDate[];
-        let weatherType: "forecast" | "historical";
-
-        if (daysDiff <= 16 && daysDiff >= 0) {
-            // Use forecast API
-            weatherType = "forecast";
-            weatherDates = await getForecastWeather(
-                location.lat,
-                location.lon,
-                tripStartDate,
-                tripEndDate
-            );
-        } else {
-            // Use historical/climate data
-            weatherType = "historical";
-            weatherDates = await getHistoricalWeather(
-                location.lat,
-                location.lon,
-                tripStartDate,
-                tripEndDate
-            );
-        }
-
-        // Handle empty results
-        if (weatherDates.length === 0) {
-            return {
-                type: weatherType,
-                city: location.name,
                 dates: [],
                 error: true,
                 message: "Weather data temporarily unavailable",
             };
         }
 
-        return {
-            type: weatherType,
-            city: location.name,
-            dates: weatherDates,
-        };
+        return { type: useHistorical ? "historical" : "forecast", city, dates };
     } catch (error) {
         console.error("Error in getWeatherForTrip:", error);
-        return {
-            type: "forecast",
-            city,
-            dates: [],
-            error: true,
-            message: "Weather data unavailable",
-        };
+        return { type: "forecast", city, dates: [], error: true, message: "Weather data unavailable" };
     }
 }
 
-// Export for testing and type usage
-export type { WeatherResponse, WeatherDate };
+export type { WeatherResponse as WeatherResponseType };

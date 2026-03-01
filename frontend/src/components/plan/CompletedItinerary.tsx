@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin, Utensils, Camera, Bus, Clock, Edit3, Check, X,
-  Youtube, Cloud, Globe, Bot, ChevronDown, ChevronUp, CheckSquare,
-  Sun, CloudSun, CloudRain, CloudSnow, Wind, Cloudy
+  Youtube, Cloud, Globe, ChevronDown, ChevronUp, CheckSquare,
+  Sun, CloudSun, CloudRain, CloudSnow, Wind, Cloudy, Zap, History, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import MapCard from "@/components/MapCard";
 import TripChecklist from "@/components/TripChecklist";
+import { fetchWeatherForCity, type DailyWeather } from "@/lib/weather";
 
 interface ItineraryItem {
   time: string;
@@ -27,6 +28,10 @@ interface ItineraryDay {
 interface CompletedItineraryProps {
   destination: string;
   onOpenAIChat: () => void;
+  /** ISO date string YYYY-MM-DD – if provided, real weather is fetched */
+  startDate?: string;
+  /** ISO date string YYYY-MM-DD */
+  endDate?: string;
 }
 
 const FULL_ITINERARY: ItineraryDay[] = [
@@ -70,39 +75,17 @@ const YOUTUBE_VIDEOS = [
   { id: "4", title: `Budget Travel — Complete Guide`, thumbnail: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=320&h=180&fit=crop", channel: "Kara & Nate", views: "567K" },
 ];
 
-type WeatherCondition = "sunny" | "partly-cloudy" | "cloudy" | "rainy" | "snowy" | "windy";
-
-const WEATHER_ICON: Record<WeatherCondition, JSX.Element> = {
-  "sunny": <Sun className="h-5 w-5 text-yellow-500" />,
-  "partly-cloudy": <CloudSun className="h-5 w-5 text-yellow-400" />,
-  "cloudy": <Cloudy className="h-5 w-5 text-slate-400" />,
-  "rainy": <CloudRain className="h-5 w-5 text-blue-400" />,
-  "snowy": <CloudSnow className="h-5 w-5 text-sky-300" />,
-  "windy": <Wind className="h-5 w-5 text-teal-400" />,
-};
-
-const WEATHER_MOCK: { condition: WeatherCondition; high: number; low: number }[] = [
-  { condition: "sunny", high: 32, low: 24 },
-  { condition: "partly-cloudy", high: 30, low: 23 },
-  { condition: "partly-cloudy", high: 31, low: 24 },
-  { condition: "rainy", high: 28, low: 22 },
-  { condition: "sunny", high: 33, low: 25 },
-  { condition: "cloudy", high: 29, low: 23 },
-  { condition: "sunny", high: 31, low: 24 },
-];
-
-// Build date labels starting from tomorrow
-function getWeatherDates() {
-  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return WEATHER_MOCK.map((w, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1 + i);
-    return {
-      ...w,
-      dayName: DAY_NAMES[d.getDay()],
-      dateLabel: `${d.getDate()} ${d.toLocaleString("default", { month: "short" })}`,
-    };
-  });
+/** Map WMO-like numeric code to a Lucide icon */
+function wmoIcon(code: number): React.ReactNode {
+  if (code === 0) return <Sun className="h-5 w-5 text-yellow-500" />;
+  if (code <= 2) return <CloudSun className="h-5 w-5 text-yellow-400" />;
+  if (code === 3) return <Cloudy className="h-5 w-5 text-slate-400" />;
+  if (code <= 48) return <Cloud className="h-5 w-5 text-slate-400" />;
+  if (code <= 67) return <CloudRain className="h-5 w-5 text-blue-400" />;
+  if (code <= 77) return <CloudSnow className="h-5 w-5 text-sky-300" />;
+  if (code <= 82) return <CloudRain className="h-5 w-5 text-blue-500" />;
+  if (code <= 99) return <Zap className="h-5 w-5 text-violet-500" />;
+  return <Wind className="h-5 w-5 text-teal-400" />;
 }
 
 const typeIcon = {
@@ -119,12 +102,11 @@ const typeColor = {
   experience: "text-success bg-success/10",
 };
 
-// Generate trip dates for the calendar (3-day trip starting tomorrow)
-function getTripDates() {
-  const start = new Date();
-  start.setDate(start.getDate() + 1);
+// Generate trip dates for the calendar
+function getTripDates(startDate?: string, numDays = 3) {
+  const start = startDate ? new Date(startDate + "T00:00:00") : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
   const dates: Date[] = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < numDays; i++) {
     const d = new Date(start);
     d.setDate(d.getDate() + i);
     dates.push(d);
@@ -132,22 +114,47 @@ function getTripDates() {
   return dates;
 }
 
-// Returns "Mon, 23 Feb" for a given day index (0-based, starting from tomorrow)
-function getDayDate(dayIdx: number) {
+// Returns "Mon, 23 Feb" for a given day index (0-based)
+function getDayDate(dayIdx: number, startDate?: string) {
   const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const d = new Date();
-  d.setDate(d.getDate() + 1 + dayIdx);
+  const d = startDate
+    ? new Date(startDate + "T00:00:00")
+    : (() => { const n = new Date(); n.setDate(n.getDate() + 1); return n; })();
+  d.setDate(d.getDate() + dayIdx);
   return `${DAY_NAMES[d.getDay()]}, ${d.getDate()} ${d.toLocaleString("default", { month: "short" })}`;
 }
 
-export default function CompletedItinerary({ destination, onOpenAIChat }: CompletedItineraryProps) {
+export default function CompletedItinerary({ destination, onOpenAIChat, startDate, endDate }: CompletedItineraryProps) {
   const [itinerary, setItinerary] = useState(FULL_ITINERARY);
   const [editingItem, setEditingItem] = useState<{ day: number; idx: number } | null>(null);
   const [editText, setEditText] = useState("");
   const [collapsedDays, setCollapsedDays] = useState<Set<number>>(new Set());
   const [showChecklist, setShowChecklist] = useState(false);
 
-  const tripDates = getTripDates();
+  // ── Real weather state ──────────────────────────────────────────────────
+  const [weatherDays, setWeatherDays] = useState<DailyWeather[]>([]);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [isHistoricalWeather, setIsHistoricalWeather] = useState(false);
+
+  useEffect(() => {
+    if (!destination) return;
+    // Derive a 7-day window if no explicit dates given
+    const today = new Date();
+    const sd = startDate ?? (() => { const d = new Date(today); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+    const ed = endDate ?? (() => { const d = new Date(today); d.setDate(d.getDate() + 7); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+
+    setWeatherLoading(true);
+    fetchWeatherForCity(destination, sd, ed)
+      .then(({ days, isHistorical }) => {
+        setWeatherDays(days.slice(0, 7));
+        setIsHistoricalWeather(isHistorical);
+      })
+      .catch(() => { /* leave weatherDays empty — handled below */ })
+      .finally(() => setWeatherLoading(false));
+  }, [destination, startDate, endDate]);
+
+  const numDays = FULL_ITINERARY.length;
+  const tripDates = getTripDates(startDate, numDays);
 
   const startEdit = (dayIdx: number, itemIdx: number, currentTitle: string) => {
     setEditingItem({ day: dayIdx, idx: itemIdx });
@@ -224,11 +231,23 @@ export default function CompletedItinerary({ destination, onOpenAIChat }: Comple
           animate={{ opacity: 1, y: 0 }}
           className="mb-5 rounded-xl border border-border bg-card overflow-hidden"
         >
-          {/* Header row: title + location */}
+          {/* Header row: title + location + badge */}
           <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/50">
             <div className="flex items-center gap-2">
               <Cloud className="h-4 w-4 text-primary" />
               <span className="text-sm font-semibold text-foreground">Weather Forecast</span>
+              {weatherLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+              {!weatherLoading && isHistoricalWeather && weatherDays.length > 0 && (
+                <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                  <History className="h-2.5 w-2.5" />
+                  Historical (same season)
+                </span>
+              )}
+              {!weatherLoading && !isHistoricalWeather && weatherDays.length > 0 && (
+                <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                  Live Forecast
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3" />
@@ -237,21 +256,36 @@ export default function CompletedItinerary({ destination, onOpenAIChat }: Comple
           </div>
 
           {/* 7-day grid */}
-          <div className="grid grid-cols-7 gap-2 p-4">
-            {getWeatherDates().map((w, i) => (
-              <div key={i} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-accent/30 border border-border/50">
-                {/* Day name */}
-                <p className="text-[10px] font-semibold text-foreground">{w.dayName}</p>
-                {/* Date */}
-                <p className="text-[9px] text-muted-foreground">{w.dateLabel}</p>
-                {/* Lucide weather icon */}
-                <div className="my-1">{WEATHER_ICON[w.condition]}</div>
-                {/* High/Low */}
-                <p className="text-[10px] font-bold text-foreground">{w.high}°</p>
-                <p className="text-[9px] text-muted-foreground">{w.low}°</p>
-              </div>
-            ))}
-          </div>
+          {weatherLoading ? (
+            <div className="flex items-center justify-center gap-1.5 py-8">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+              ))}
+            </div>
+          ) : weatherDays.length > 0 ? (
+            <div className="grid gap-2 p-4" style={{ gridTemplateColumns: `repeat(${Math.min(weatherDays.length, 7)}, 1fr)` }}>
+              {weatherDays.slice(0, 7).map((w, i) => {
+                const d = new Date(w.date + "T00:00:00");
+                const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                return (
+                  <div key={i} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-accent/30 border border-border/50">
+                    <p className="text-[10px] font-semibold text-foreground">{DAY_NAMES[d.getDay()]}</p>
+                    <p className="text-[9px] text-muted-foreground">{d.getDate()} {d.toLocaleString("default", { month: "short" })}</p>
+                    <div className="my-1">{wmoIcon(w.weatherCode)}</div>
+                    <p className="text-[10px] font-bold text-foreground">{Math.round(w.tempMax)}°</p>
+                    <p className="text-[9px] text-muted-foreground">{Math.round(w.tempMin)}°</p>
+                    {w.precipitationProbability > 0 && (
+                      <p className="text-[8px] text-blue-500">💧{w.precipitationProbability}%</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
+              Weather data unavailable
+            </div>
+          )}
         </motion.div>
 
         {/* Checklist (togglable) */}
@@ -287,7 +321,7 @@ export default function CompletedItinerary({ destination, onOpenAIChat }: Comple
                     Day {day.day}
                   </span>
                   <span className="text-[10px] text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-md">
-                    {getDayDate(dayIdx)}
+                    {getDayDate(dayIdx, startDate)}
                   </span>
                   <span className="text-sm font-medium text-foreground">{day.title}</span>
                   <span className="text-xs text-muted-foreground">• {day.items.length} activities</span>

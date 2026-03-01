@@ -215,11 +215,12 @@ export default function TripFoodSpots({
                                     initial={{ opacity: 0, x: -8 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: i * 0.07 }}
+                                    onClick={() => onSelectSpot(isSelected ? null : spot)}
                                     className={[
-                                        "flex items-center gap-2.5 rounded-xl p-1.5 border transition-all",
+                                        "flex items-center gap-2.5 rounded-xl p-1.5 border transition-all cursor-pointer",
                                         isSelected
                                             ? "border-orange-300 bg-orange-50/60"
-                                            : "border-transparent hover:bg-slate-50",
+                                            : "border-transparent hover:bg-slate-50 hover:border-orange-100",
                                     ].join(" ")}
                                 >
                                     {/* Thumbnail */}
@@ -258,18 +259,18 @@ export default function TripFoodSpots({
                                         )}
                                     </div>
 
-                                    {/* Pin button */}
+                                    {/* Pin button — larger */}
                                     <button
-                                        onClick={() => onSelectSpot(isSelected ? null : spot)}
+                                        onClick={(e) => { e.stopPropagation(); onSelectSpot(isSelected ? null : spot); }}
                                         title={isSelected ? "Deselect" : "Show on map"}
                                         className={[
-                                            "shrink-0 flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border transition-all",
+                                            "shrink-0 flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all",
                                             isSelected
                                                 ? "bg-orange-500 text-white border-orange-500"
                                                 : "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100",
                                         ].join(" ")}
                                     >
-                                        <MapPin className="h-2 w-2" />
+                                        <MapPin className="h-3 w-3" />
                                         {isSelected ? "✓" : "Pin"}
                                     </button>
                                 </motion.div>
@@ -314,11 +315,12 @@ export default function TripFoodSpots({
                                 initial={{ opacity: 0, y: 12 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.08 }}
+                                onClick={() => onSelectSpot(isSelected ? null : spot)}
                                 className={[
-                                    "group relative flex flex-col rounded-xl border overflow-hidden transition-all duration-200",
+                                    "group relative flex flex-col rounded-xl border overflow-hidden transition-all duration-200 cursor-pointer",
                                     isSelected
                                         ? "border-orange-400 shadow-md ring-1 ring-orange-300"
-                                        : "border-border/50 hover:shadow-sm hover:border-border",
+                                        : "border-border/50 hover:shadow-md hover:border-orange-200",
                                 ].join(" ")}
                             >
                                 <div className="relative h-32 bg-slate-100 overflow-hidden">
@@ -358,15 +360,15 @@ export default function TripFoodSpots({
                                     )}
                                     <div className="flex items-center gap-2 mt-auto pt-2">
                                         <button
-                                            onClick={() => onSelectSpot(isSelected ? null : spot)}
+                                            onClick={(e) => { e.stopPropagation(); onSelectSpot(isSelected ? null : spot); }}
                                             className={[
-                                                "flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-all",
+                                                "flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-all",
                                                 isSelected
                                                     ? "bg-orange-500 text-white border-orange-500 shadow-sm"
                                                     : "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100",
                                             ].join(" ")}
                                         >
-                                            <MapPin className="h-2.5 w-2.5" />
+                                            <MapPin className="h-3.5 w-3.5" />
                                             {isSelected ? "Pinned ✓" : "Show on map"}
                                         </button>
                                         <ExternalLink className="h-3 w-3 text-muted-foreground/40 ml-auto" />

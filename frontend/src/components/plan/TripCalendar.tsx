@@ -58,18 +58,18 @@ export default function TripCalendar({
         defaultMonth={defaultMonth}
         className="w-full"
         classNames={{
-          months: "w-full",
-          month: "w-full space-y-4",
+          months: "flex justify-center",
+          month: "space-y-4",
           caption: "relative flex items-center justify-center w-full",
           caption_label: "text-base font-semibold text-foreground",
           nav: "flex items-center gap-2",
           nav_button:
             "h-8 w-8 rounded-md border border-border bg-white hover:bg-muted transition flex items-center justify-center",
-          table: "w-full border-collapse",
-          head_row: "w-full",
-          row: "w-full",
+          table: "border-collapse mx-auto",
+          head_row: "",
+          row: "",
           head_cell: "text-muted-foreground font-medium text-sm",
-          cell: "h-11 w-full text-center",
+          cell: "h-11 w-11 text-center",
           day: "h-10 w-10 p-0 font-medium aria-selected:opacity-100",
           day_selected:
             "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground rounded-md",

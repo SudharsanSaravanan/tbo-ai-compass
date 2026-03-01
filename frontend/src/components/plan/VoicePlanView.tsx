@@ -347,7 +347,50 @@ function VoiceRoomContent({
   };
 
   return (
-    <div className="flex-1 flex min-h-0 h-full">
+    <div className="flex-1 flex min-h-0 h-full relative">
+      {/* ══ Connecting overlay — shown until LiveKit room is ready ══ */}
+      <AnimatePresence>
+        {!connected && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.6, ease: "easeOut" } }}
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-gradient-to-br from-slate-50/95 via-white/98 to-primary/5 dark:from-background/95 dark:via-background/98 dark:to-primary/5 backdrop-blur-sm"
+          >
+            {/* Animated ring */}
+            <div className="relative flex items-center justify-center">
+              <div className="absolute w-28 h-28 rounded-full border-2 border-primary/15 animate-ping" style={{ animationDuration: "1.8s" }} />
+              <div className="absolute w-20 h-20 rounded-full border border-primary/25 animate-pulse" />
+              <div className="relative w-14 h-14 rounded-full bg-white dark:bg-card shadow-xl border border-primary/20 flex items-center justify-center">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  className="absolute inset-1 rounded-full border-2 border-transparent border-t-primary/60"
+                />
+                <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+                </div>
+              </div>
+            </div>
+            {/* Text */}
+            <div className="flex flex-col items-center gap-2 text-center">
+              <p className="text-sm font-semibold text-foreground tracking-tight">Warming up your AI travel agent</p>
+              <p className="text-[11px] text-muted-foreground max-w-[200px] leading-relaxed">
+                Your voice room is connecting — just a moment
+              </p>
+              <div className="flex items-center gap-1.5 mt-2">
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="w-1.5 h-1.5 rounded-full bg-primary/50 animate-bounce"
+                    style={{ animationDelay: `${i * 0.18}s` }}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ═══ LEFT: Waveform (fixed) + Scrollable Content ═══ */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Voice Hero Section */}
@@ -645,7 +688,7 @@ function VoiceRoomContent({
                             )}
                             <span className="text-sm font-semibold text-foreground">{d.title}</span>
                             {dayWeather && (
-                              <span className="ml-auto flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-slate-100/80 dark:bg-muted border border-border/40 rounded-full px-2.5 py-0.5">
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-slate-100/80 dark:bg-muted border border-border/40 rounded-full px-2.5 py-0.5">
                                 {wmoIcon(dayWeather.weatherCode)}
                                 <span className="text-foreground font-semibold">{Math.round(dayWeather.tempMax)}°</span>
                                 <span className="text-muted-foreground/70">/{Math.round(dayWeather.tempMin)}°</span>
@@ -858,8 +901,29 @@ export default function VoicePlanView({ initialQuery, initialMessage, onBack }: 
 
   if (!token) {
     return (
-      <div className="h-[calc(100vh-3.5rem)] flex items-center justify-center">
-        <p className="text-muted-foreground">Getting voice room token…</p>
+      <div className="h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center gap-8 bg-gradient-to-br from-slate-50 via-white to-primary/5 dark:from-background dark:via-background dark:to-primary/5">
+        {/* Breathing ring */}
+        <div className="relative flex items-center justify-center">
+          <div className="absolute w-24 h-24 rounded-full border-2 border-primary/20 animate-ping" />
+          <div className="absolute w-16 h-16 rounded-full border border-primary/30 animate-pulse" />
+          <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center shadow-lg">
+            <div className="w-4 h-4 rounded-full bg-primary animate-pulse" />
+          </div>
+        </div>
+        {/* Label + dots */}
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-sm font-semibold text-foreground tracking-tight">Connecting to your AI travel agent</p>
+          <p className="text-[11px] text-muted-foreground">Setting up your voice room…</p>
+          <div className="flex items-center gap-1.5 mt-1">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
