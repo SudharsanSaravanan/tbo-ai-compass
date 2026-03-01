@@ -1,85 +1,77 @@
-# TBO AI Compass – Chrome Extension
+# TBO AI Compass Chrome Extension
 
-A Chrome extension that lets you **save YouTube travel videos directly to your TBO AI Compass travel plans** with one click.
+A professional Chrome extension that allows users to save YouTube travel videos and blog URLs directly to their TBO AI Compass travel plans.
 
----
+## Features
 
-## ✨ Features
+- **YouTube Content Detection**: Automatically detects when the active tab is a YouTube video page, capturing the video title, URL, and thumbnail.
+- **Blog URL Integration**: Allows users to save articles, blogs, or any webpage. Automatically pre-fills the URL and page title of the current active tab.
+- **Bucket Creation and Organization**: Users can create custom "Buckets" (e.g., "Bali Getaway", "Europe Trip") to categorize and group saved videos and blogs intuitively.
+- **Plan Management**: A built-in dashboard to browse, search, and manage all saved content. Users can view saved plans, copy URLs, directly open saved links, or delete outdated plans.
+- **Advanced Filtering**: Filter saved plans by specific buckets or search by plan name, title, or notes.
+- **Frontend Real-time Sync**: Automatically mirrors saved plans and buckets to the web application's local storage across active frontend tabs for seamless data transfer.
+- **Badge Counter**: Displays the total count of saved items directly on the extension icon.
 
-| Feature | Description |
-|---|---|
-| 🎬 YouTube Detection | Automatically detects when you're on a YouTube video page |
-| 💾 Save to Plans | One-click saves the video URL + title to local browser storage |
-| 🗂️ Plan Manager | Browse, search, copy, open, and delete saved plans |
-| 🔍 Search | Filter saved plans by name, title, or note |
-| 📛 Badge Counter | Shows the number of saved plans on the extension icon |
-| 📋 Copy URL | Copy any saved YouTube URL to clipboard in one click |
+## TBO AI Compass Extension in Action
 
----
+https://github.com/user-attachments/assets/2222871e-ccab-42f4-8858-cae9470190dd
 
-## 📁 File Structure
+## File Structure
 
-```
-extension/
-├── manifest.json        # Chrome Extension Manifest V3
-├── popup.html           # Extension popup UI
-├── popup.css            # Popup styles (matches TBO AI Compass design system)
-├── popup.js             # Popup logic – YouTube detection & storage management
-├── background.js        # Service worker – badge sync & message handling
-├── content.js           # Content script – YouTube SPA navigation detection
-└── icons/
-    ├── icon16.png
-    ├── icon32.png
-    ├── icon48.png
-    └── icon128.png
-```
+- `manifest.json`: Chrome Extension Manifest V3 configuration.
+- `popup.html`: Extension user interface structure.
+- `popup.css`: Extension styling aligned with the TBO AI Compass design system.
+- `popup.js`: Core user interface logic including YouTube detection, blog handling, bucket management, and local storage interactions.
+- `background.js`: Service worker managing badge synchronization, fallback functionalities, and bridging data to frontend tabs.
+- `content.js`: Content script handling SPA (Single Page Application) navigation detection on YouTube.
+- `icons/`: Directory containing extension icon assets across various resolutions.
 
----
+## Installation Instructions
 
-## 🚀 How to Load in Chrome
+1. Open Google Chrome and navigate to `chrome://extensions/`.
+2. Enable **Developer mode** via the toggle in the top-right corner.
+3. Click the **Load unpacked** button.
+4. Select the `extension/` directory from this repository.
+5. The TBO AI Compass extension icon will now be available in your browser toolbar.
 
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Toggle **Developer mode** ON (top-right switch)
-3. Click **"Load unpacked"**
-4. Select the `extension/` folder from this project
-5. The **TBO AI Compass** icon will appear in your Chrome toolbar
+## Usage Guide
 
----
+1. Navigate to any YouTube video or travel blog.
+2. Click the TBO AI Compass extension icon in the toolbar.
+3. The extension will automatically detect the active content type (YouTube or Blog).
+4. Select an existing bucket from the dropdown or click to create a new bucket to categorize your plan.
+5. Add an optional plan name and note.
+6. Click **Add to Travel Plans**. The content will be securely saved to your local browser storage and synchronized with the TBO AI Compass frontend.
+7. Use the header navigation within the extension to view, filter, and manage all saved plans and buckets.
 
-## 📖 How to Use
+## Storage Architecture
 
-1. Open any **YouTube video** in Chrome
-2. Click the **TBO AI Compass extension icon** in the toolbar
-3. The popup detects the video and auto-fills the title
-4. Optionally enter a **Travel Plan Name** and a **Note**
-5. Click **"Add to Travel Plans"** — the URL is saved to local browser storage
-6. Click the ❤️ icon in the popup header to view all saved plans
+All data is managed locally using the Chrome Storage API (`chrome.storage.local`), ensuring complete data privacy. The extension structures saved contents and buckets as follows:
 
----
-
-## 🗄️ Storage
-
-All data is stored using **`chrome.storage.local`** — no data leaves your browser. Each saved plan contains:
+### Plan Data Structure
 
 ```json
 {
-  "id": "plan_1234_abc",
+  "id": "id_1234567890_abcde",
+  "type": "youtube", 
   "planName": "Bali Getaway 2025",
   "note": "Check beach resort section",
   "url": "https://www.youtube.com/watch?v=...",
   "videoId": "...",
   "title": "Best Beaches in Bali",
   "savedAt": "2025-03-01T10:30:00.000Z",
-  "thumbnail": "https://img.youtube.com/vi/.../mqdefault.jpg"
+  "thumbnail": "https://img.youtube.com/vi/.../mqdefault.jpg",
+  "bucketId": "id_0987654321_fghij",
+  "bucketName": "Indonesia Trip"
 }
 ```
 
----
+### Bucket Data Structure
 
-## 🎨 Design
-
-Matches the TBO AI Compass frontend design system:
-- **Primary Color**: `hsl(211, 69%, 42%)` (Travel Blue)
-- **Typography**: Lora (headings) + Source Sans 3 (body)
-- **Radius**: 6–14px rounded corners
-- **Animations**: Subtle slide-in / fade-in transitions
+```json
+{
+  "id": "id_0987654321_fghij",
+  "name": "Indonesia Trip",
+  "createdAt": "2025-03-01T10:25:00.000Z"
+}
+```
