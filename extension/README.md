@@ -12,6 +12,10 @@ A professional Chrome extension that allows users to save YouTube travel videos 
 - **Frontend Real-time Sync**: Automatically mirrors saved plans and buckets to the web application's local storage across active frontend tabs for seamless data transfer.
 - **Badge Counter**: Displays the total count of saved items directly on the extension icon.
 
+## TBO AI Compass Extension in Action
+
+https://github.com/user-attachments/assets/2222871e-ccab-42f4-8858-cae9470190dd
+
 ## File Structure
 
 - `manifest.json`: Chrome Extension Manifest V3 configuration.
