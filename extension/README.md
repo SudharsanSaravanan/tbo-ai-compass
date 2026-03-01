@@ -14,7 +14,7 @@ A professional Chrome extension that allows users to save YouTube travel videos 
 
 ## TBO AI Compass Extension in Action
 
-https://github.com/user-attachments/assets/2222871e-ccab-42f4-8858-cae9470190dd
+https://github.com/user-attachments/assets/a1d0fbac-805d-4dc6-ac0a-e2ca33b96ef7
 
 ## File Structure
 
