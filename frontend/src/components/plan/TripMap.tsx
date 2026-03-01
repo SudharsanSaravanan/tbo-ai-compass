@@ -43,6 +43,7 @@ const makeFoodIcon = (active = false) => {
   });
 };
 
+
 /** Day-number label: appears ONLY at the first waypoint of a day's route. */
 const makeStartLabel = (dayNum: number, color: string) =>
   L.divIcon({

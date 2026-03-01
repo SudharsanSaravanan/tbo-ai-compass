@@ -13,6 +13,7 @@
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+
 export interface FoodSpot {
     name: string;
     restaurant: string;

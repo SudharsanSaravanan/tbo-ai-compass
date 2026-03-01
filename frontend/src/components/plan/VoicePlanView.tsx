@@ -33,6 +33,7 @@ import {
   Zap,
 } from "lucide-react";
 
+
 /** Map a WMO weather code to a coloured Lucide icon element */
 function wmoIcon(code: number): React.ReactNode {
   if (code === 0) return <Sun className="h-3.5 w-3.5 text-yellow-500" />;
