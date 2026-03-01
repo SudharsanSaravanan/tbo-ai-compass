@@ -186,3 +186,4 @@ export async function getWeatherForTrip(
 }
 
 export type { WeatherResponse as WeatherResponseType };
+

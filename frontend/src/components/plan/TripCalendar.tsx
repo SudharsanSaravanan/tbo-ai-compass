@@ -50,7 +50,6 @@ export default function TripCalendar({
           </span>
         ) : null}
       </div>
-
       {/* Calendar */}
       <Calendar
         mode="multiple"

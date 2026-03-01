@@ -391,7 +391,6 @@ export default function CompletedItinerary({ destination, onOpenAIChat, startDat
           ))}
         </div>
       </div>
-
       {/* Middle — Calendar + YouTube */}
       <div className="w-[320px] shrink-0 overflow-y-auto border-r border-border bg-card/30 px-4 py-5">
         {/* Calendar with trip dates marked */}

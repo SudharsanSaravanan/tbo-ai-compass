@@ -8,7 +8,6 @@
  *                 itinerary day (< 5 km), shown as a "Try on Day X" badge.
  */
 
-
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, UtensilsCrossed, ExternalLink, CalendarDays } from "lucide-react";

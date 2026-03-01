@@ -15,7 +15,6 @@
 
 const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY || "";
 const WEATHER_BASE = "https://api.weatherapi.com/v1";
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface DailyWeather {
