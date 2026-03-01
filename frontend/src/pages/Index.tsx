@@ -139,8 +139,11 @@ export default function Index() {
   };
 
   const handleGenerateItinerary = (plan: SavedPlan) => {
-    const q = plan.planName || plan.title || "Travel Plan";
-    navigate("/intent", { state: { query: q, youtubeUrl: plan.url } });
+    const title = plan.planName || plan.title || "Travel Plan";
+    const initialMessage =
+      `I want to plan a trip based on this YouTube travel video: ${plan.url}. ` +
+      `The video is titled "${title}". Please use this video as your reference and help me plan this trip.`;
+    navigate("/plan", { state: { query: title, initialMessage } });
   };
 
   const handleRemovePlan = (planId: string) => {
