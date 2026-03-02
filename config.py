@@ -101,6 +101,12 @@ TRANSLATION_CHUNK_SIZE_CHARS = 2000
 # Language codes considered "English" (no translation needed)
 ENGLISH_LANGUAGE_CODES = frozenset({"en", "en-US", "en-GB", "en-IN"})
 
+# Per-chunk timeout for HF/Groq translation requests (seconds)
+TRANSLATION_TIMEOUT = 30
+
+# Total wall-clock timeout for the entire translation step (seconds)
+TRANSLATION_TOTAL_TIMEOUT = 45
+
 
 # ============================================================================
 # LLM CONFIGURATION

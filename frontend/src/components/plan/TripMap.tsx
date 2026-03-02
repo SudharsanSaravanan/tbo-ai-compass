@@ -22,6 +22,10 @@ const redIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
   shadowUrl: markerShadow, iconSize: [30, 48], iconAnchor: [15, 48], popupAnchor: [1, -34], shadowSize: [41, 41],
 });
+const blueIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
+  shadowUrl: markerShadow, iconSize: [30, 48], iconAnchor: [15, 48], popupAnchor: [1, -34], shadowSize: [41, 41],
+});
 
 /** Fork-and-knife teardrop pin for food spots */
 const makeFoodIcon = (active = false) => {
@@ -113,12 +117,21 @@ interface TripMapProps {
   foodSpots?: FoodSpot[];
   selectedFoodSpot?: FoodSpot | null;
   itinerary?: ItineraryData | null;
+  selectedHotel?: { name: string; lat: number; lng: number } | null;
 }
 
 // ─── Inner map controllers ────────────────────────────────────────────────────
 
 /** Flies to selected food spot */
 function FoodController({ spot }: { spot?: FoodSpot | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (spot && spot.lat !== 0) map.flyTo([spot.lat, spot.lng], 15, { duration: 1.4 });
+  }, [spot, map]);
+  return null;
+}
+
+function HotelController({ spot }: { spot?: { lat: number; lng: number } | null }) {
   const map = useMap();
   useEffect(() => {
     if (spot && spot.lat !== 0) map.flyTo([spot.lat, spot.lng], 15, { duration: 1.4 });
@@ -177,6 +190,7 @@ export default function TripMap({
   foodSpots = [],
   selectedFoodSpot,
   itinerary,
+  selectedHotel,
 }: TripMapProps) {
   const [tab, setTab] = useState<"overview" | "daywise">("overview");
   const [dayRoutes, setDayRoutes] = useState<DayRoute[]>([]);
@@ -369,6 +383,12 @@ export default function TripMap({
                   {selectedFoodSpot.name}
                 </div>
               )}
+              {selectedHotel && (
+                <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full shadow text-[10px] font-medium text-blue-600">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                  {selectedHotel.name}
+                </div>
+              )}
             </div>
           )}
 
@@ -425,6 +445,10 @@ export default function TripMap({
                   );
                 })}
                 <FoodController spot={selectedFoodSpot} />
+                {selectedHotel && (
+                  <Marker position={[selectedHotel.lat, selectedHotel.lng]} icon={blueIcon} />
+                )}
+                <HotelController spot={selectedHotel} />
                 <OverviewResetController key={`ov-${center[0]}`} center={center} zoom={zoom} />
               </>
             )}

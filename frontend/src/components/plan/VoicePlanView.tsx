@@ -12,6 +12,7 @@ import {
   useDataChannel,
   useRoomContext,
 } from "@livekit/components-react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin,
@@ -21,6 +22,7 @@ import {
   FileText,
   Send,
   Loader2,
+  Globe,
   Youtube,
   ArrowLeft,
   Sun,
@@ -56,6 +58,7 @@ import TripCalendar from "./TripCalendar";
 import TripFoodSpots from "./TripFoodSpots";
 import VideoCard, { SmallVideoCard, type VideoInfo } from "./VideoCard";
 import { type FoodSpot } from "@/lib/tavily";
+import { fetchTboCityCode, fetchTboHotels, TboHotel } from "@/services/tboHotelService";
 
 const APP_DATA_TOPIC = "tbo-app-data";
 const TOKEN_API = import.meta.env.VITE_TOKEN_API || "http://localhost:8765";
@@ -177,6 +180,32 @@ function VoiceRoomContent({
   const [foodSpots, setFoodSpots] = useState<FoodSpot[]>([]);
   const [selectedFoodSpot, setSelectedFoodSpot] = useState<FoodSpot | null>(null);
 
+  const [hotels, setHotels] = useState<TboHotel[]>([]);
+  const [hotelsLoading, setHotelsLoading] = useState(false);
+  const [selectedHotelIndex, setSelectedHotelIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!locations.destination) return;
+    const loadHotels = async () => {
+      setHotelsLoading(true);
+      try {
+        let cityCode = await fetchTboCityCode(locations.destination!.name);
+        if (!cityCode) {
+          cityCode = await fetchTboCityCode(locations.destination!.name.split(',')[0]);
+        }
+        if (cityCode) {
+          const hotelsLists = await fetchTboHotels(cityCode);
+          setHotels(hotelsLists.slice(0, 10));
+        }
+      } catch (e) {
+        console.error("Hotel fetch error:", e);
+      } finally {
+        setHotelsLoading(false);
+      }
+    };
+    loadHotels();
+  }, [locations.destination]);
+
   useEffect(() => {
     setConnected(room.state === "connected");
   }, [room.state]);
@@ -278,16 +307,7 @@ function VoiceRoomContent({
     )
   );
 
-  // Mute mic during discovery
-  useEffect(() => {
-    const local = room.localParticipant;
-    if (!local) return;
-    if (discoveryStatus === "running") {
-      (local as any).setMicrophoneEnabled?.(false);
-    } else {
-      (local as any).setMicrophoneEnabled?.(true);
-    }
-  }, [discoveryStatus, room.localParticipant]);
+  // Keep mic active during discovery — voice conversation runs in parallel
 
   const handleSendText = async () => {
     const text = inputText.trim();
@@ -356,20 +376,13 @@ function VoiceRoomContent({
             exit={{ opacity: 0, transition: { duration: 0.6, ease: "easeOut" } }}
             className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-gradient-to-br from-slate-50/95 via-white/98 to-primary/5 dark:from-background/95 dark:via-background/98 dark:to-primary/5 backdrop-blur-sm"
           >
-            {/* Animated ring */}
-            <div className="relative flex items-center justify-center">
-              <div className="absolute w-28 h-28 rounded-full border-2 border-primary/15 animate-ping" style={{ animationDuration: "1.8s" }} />
-              <div className="absolute w-20 h-20 rounded-full border border-primary/25 animate-pulse" />
-              <div className="relative w-14 h-14 rounded-full bg-white dark:bg-card shadow-xl border border-primary/20 flex items-center justify-center">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-1 rounded-full border-2 border-transparent border-t-primary/60"
-                />
-                <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">
-                  <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
-                </div>
-              </div>
+            {/* Lottie Loader */}
+            <div className="relative flex items-center justify-center w-40 h-40">
+              <DotLottieReact
+                src="/BHCABa46SG.lottie"
+                loop
+                autoplay
+              />
             </div>
             {/* Text */}
             <div className="flex flex-col items-center gap-2 text-center">
@@ -410,7 +423,7 @@ function VoiceRoomContent({
                   connected
                     ? "bg-primary/8 border border-primary/20 shadow-[0_0_24px_rgba(var(--primary),0.12)]"
                     : "bg-muted/40 border border-border",
-                  discoveryStatus === "running" && "opacity-40"
+                  discoveryStatus === "running" && "opacity-80"
                 )}
               >
                 {connected ? (
@@ -434,7 +447,7 @@ function VoiceRoomContent({
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   {discoveryStatus === "running"
-                    ? "Mic muted. We'll resume once analysis finishes."
+                    ? "Your voice is still live — keep chatting while we search."
                     : "Your voice is live. You can also type below."}
                 </p>
               </div>
@@ -538,6 +551,15 @@ function VoiceRoomContent({
                           foodSpots={foodSpots}
                           selectedFoodSpot={selectedFoodSpot}
                           itinerary={itinerary}
+                          selectedHotel={
+                            selectedHotelIndex !== null && hotels[selectedHotelIndex] && hotels[selectedHotelIndex].Map
+                              ? {
+                                name: hotels[selectedHotelIndex].HotelName,
+                                lat: parseFloat(hotels[selectedHotelIndex].Map!.split("|")[0]),
+                                lng: parseFloat(hotels[selectedHotelIndex].Map!.split("|")[1])
+                              }
+                              : null
+                          }
                         />
                       </div>
                     </div>
@@ -631,6 +653,63 @@ function VoiceRoomContent({
                 </div>
               </div>
             )}
+
+            {/* ── SECTION 3: Supported Hotels ── */}
+            <AnimatePresence>
+              {(hotelsLoading || hotels.length > 0) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm p-5 overflow-hidden"
+                >
+                  <div className="flex items-center gap-2 mb-4">
+                    <Globe className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm font-semibold text-foreground">Suggested Hotels</span>
+                    <span className="ml-auto text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      Powered by TBO Holidays
+                    </span>
+                  </div>
+                  {hotelsLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Fetching hotels...
+                    </div>
+                  ) : hotels.length === 0 ? (
+                    <div className="text-xs text-muted-foreground p-3 bg-accent rounded-xl border border-border">
+                      No hotels found for this city.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {hotels.map((h, i) => (
+                        <div
+                          key={h.HotelCode}
+                          className={cn(
+                            "rounded-xl border border-border bg-card p-3 transition-colors cursor-pointer",
+                            selectedHotelIndex === i ? "border-primary bg-primary/5" : "hover:border-primary/50"
+                          )}
+                          onClick={() => setSelectedHotelIndex(i)}
+                        >
+                          <p className="font-semibold text-[13px] line-clamp-1" title={h.HotelName}>{h.HotelName}</p>
+                          <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5 mb-1">{h.Address}</p>
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {h.PhoneNumber && (
+                              <a href={`tel:${h.PhoneNumber}`} className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1 hover:bg-primary/20 transition-colors" target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                                <MapPin className="h-2 w-2" /> Call
+                              </a>
+                            )}
+                            {h.HotelWebsiteUrl && (
+                              <a href={h.HotelWebsiteUrl} className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1 hover:bg-primary/20 transition-colors" target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                                <Globe className="h-2 w-2" /> Website
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* ── SECTION 4: Itinerary timeline ── */}
             <AnimatePresence>
@@ -815,13 +894,12 @@ function VoiceRoomContent({
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder="Type a message…"
-            disabled={discoveryStatus === "running"}
             className="flex-1 text-xs px-3 py-2 rounded-xl border border-input bg-slate-50 dark:bg-background focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 transition-shadow focus:shadow-sm"
           />
           <Button
             size="icon"
             className="h-8 w-8 rounded-xl shrink-0"
-            disabled={sendingText || !inputText.trim() || discoveryStatus === "running"}
+            disabled={sendingText || !inputText.trim()}
             onClick={() => void handleSendText()}
           >
             <Send className="h-3.5 w-3.5" />
@@ -902,13 +980,13 @@ export default function VoicePlanView({ initialQuery, initialMessage, onBack }: 
   if (!token) {
     return (
       <div className="h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center gap-8 bg-gradient-to-br from-slate-50 via-white to-primary/5 dark:from-background dark:via-background dark:to-primary/5">
-        {/* Breathing ring */}
-        <div className="relative flex items-center justify-center">
-          <div className="absolute w-24 h-24 rounded-full border-2 border-primary/20 animate-ping" />
-          <div className="absolute w-16 h-16 rounded-full border border-primary/30 animate-pulse" />
-          <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center shadow-lg">
-            <div className="w-4 h-4 rounded-full bg-primary animate-pulse" />
-          </div>
+        {/* Lottie Loader */}
+        <div className="relative flex items-center justify-center w-48 h-48">
+          <DotLottieReact
+            src="/BHCABa46SG.lottie"
+            loop
+            autoplay
+          />
         </div>
         {/* Label + dots */}
         <div className="flex flex-col items-center gap-3">

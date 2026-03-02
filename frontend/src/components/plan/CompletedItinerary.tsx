@@ -8,9 +8,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
-import MapCard from "@/components/MapCard";
+import MapCard, { MapLocation } from "@/components/MapCard";
 import TripChecklist from "@/components/TripChecklist";
 import { fetchWeatherForCity, type DailyWeather } from "@/lib/weather";
+import { fetchTboCityCode, fetchTboHotels, TboHotel } from "@/services/tboHotelService";
 
 interface ItineraryItem {
   time: string;
@@ -131,10 +132,14 @@ export default function CompletedItinerary({ destination, onOpenAIChat, startDat
   const [collapsedDays, setCollapsedDays] = useState<Set<number>>(new Set());
   const [showChecklist, setShowChecklist] = useState(false);
 
-  // ── Real weather state ──────────────────────────────────────────────────
   const [weatherDays, setWeatherDays] = useState<DailyWeather[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [isHistoricalWeather, setIsHistoricalWeather] = useState(false);
+
+  // ── Hotel state ──────────────────────────────────────────────────
+  const [hotels, setHotels] = useState<TboHotel[]>([]);
+  const [hotelsLoading, setHotelsLoading] = useState(false);
+  const [selectedHotelIndex, setSelectedHotelIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!destination) return;
@@ -151,6 +156,28 @@ export default function CompletedItinerary({ destination, onOpenAIChat, startDat
       })
       .catch(() => { /* leave weatherDays empty — handled below */ })
       .finally(() => setWeatherLoading(false));
+
+    // Fetch Hotels
+    const loadHotels = async () => {
+      setHotelsLoading(true);
+      try {
+        // Find city code matching destination
+        let cityCode = await fetchTboCityCode(destination);
+        if (!cityCode) {
+          // fallback logic if destination has state or country appended vs what's in TBO response
+          cityCode = await fetchTboCityCode(destination.split(',')[0]);
+        }
+        if (cityCode) {
+          const hotelsLists = await fetchTboHotels(cityCode);
+          setHotels(hotelsLists.slice(0, 10)); // just display up to 10 hotels
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setHotelsLoading(false);
+      }
+    };
+    loadHotels();
   }, [destination, startDate, endDate]);
 
   const numDays = FULL_ITINERARY.length;
@@ -449,6 +476,42 @@ export default function CompletedItinerary({ destination, onOpenAIChat, startDat
             ))}
           </div>
         </motion.div>
+
+        {/* Suggested Hotels */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="mt-6 border-t border-border pt-5"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Globe className="h-4 w-4 text-blue-500" />
+            <span className="text-sm font-semibold text-foreground">Suggested Hotels</span>
+            {hotelsLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-auto" />}
+          </div>
+          {hotels.length === 0 && !hotelsLoading ? (
+            <div className="text-xs text-muted-foreground p-3 bg-accent rounded-xl">
+              No hotels found for this city.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {hotels.map((h, i) => (
+                <div key={h.HotelCode} className={cn("rounded-xl border border-border bg-card p-3 transition-colors", selectedHotelIndex === i ? "border-primary bg-primary/5" : "hover:border-primary/50")}>
+                  <p className="font-semibold text-sm line-clamp-1" title={h.HotelName}>{h.HotelName}</p>
+                  <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">{h.Address}</p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {h.PhoneNumber && <a href={`tel:${h.PhoneNumber}`} className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1"><MapPin className="h-2 w-2" /> Call</a>}
+                    {h.HotelWebsiteUrl && <a href={h.HotelWebsiteUrl} target="_blank" className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1"><Globe className="h-2 w-2" /> Website</a>}
+                  </div>
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+                    <Button size="sm" variant="ghost" className="h-7 text-xs flex-1 rounded-md bg-accent/50" onClick={() => setSelectedHotelIndex(i)}>View on Map</Button>
+                    <Button size="sm" className="h-7 text-xs flex-1 rounded-md" aria-label="Book Hotel">Book Now</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
       </div>
 
       {/* Right — Map */}
@@ -458,7 +521,18 @@ export default function CompletedItinerary({ destination, onOpenAIChat, startDat
           <span className="text-sm font-semibold text-foreground">Trip Map</span>
         </div>
         <div className="flex-1 relative">
-          <MapCard className="w-full h-full overflow-hidden" />
+          <MapCard
+            className="w-full h-full overflow-hidden"
+            locations={
+              selectedHotelIndex !== null && hotels[selectedHotelIndex] && hotels[selectedHotelIndex].Map
+                ? [{
+                  lat: parseFloat(hotels[selectedHotelIndex].Map.split("|")[0]),
+                  lng: parseFloat(hotels[selectedHotelIndex].Map.split("|")[1]),
+                  title: hotels[selectedHotelIndex].HotelName
+                }]
+                : undefined
+            }
+          />
         </div>
       </div>
     </div>
