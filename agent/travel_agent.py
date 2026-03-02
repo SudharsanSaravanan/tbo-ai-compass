@@ -137,15 +137,18 @@ async def entrypoint(ctx: JobContext) -> None:
             prefs.travelers,
         ])
         have_enough = bool(prefs.destination) and filled >= 3
-        no_refs = not prefs.reference_urls or all(
+        has_valid_ref = bool(prefs.reference_urls and not all(
             str(u).strip().lower() in {"", "no", "none", "n/a"}
             for u in prefs.reference_urls
-        )
+        ))
+
+        have_enough = bool(prefs.destination) and (filled >= 3 or has_valid_ref)
+        
         logger.info(
-            "[auto-trigger] filled=%d have_enough=%s no_refs=%s pipeline_started=%s prefs=%s",
-            filled, have_enough, no_refs, pipeline_started, prefs.to_dict(),
+            "[auto-trigger] filled=%d have_enough=%s has_valid_ref=%s pipeline_started=%s prefs=%s",
+            filled, have_enough, has_valid_ref, pipeline_started, prefs.to_dict(),
         )
-        if have_enough and no_refs:
+        if have_enough:
             pipeline_started = True
             travel_query = build_travel_query(prefs)
             asyncio.create_task(_run_pipeline_impl(travel_query))
@@ -189,8 +192,8 @@ async def entrypoint(ctx: JobContext) -> None:
         system = (
             "You are a date parser. Parse travel dates and return a JSON object with exactly these keys: "
             '"start_date" (string, YYYY-MM-DD), "end_date" (string, YYYY-MM-DD), "num_days" (integer). '
-            "If end_date is unclear, compute it as start_date + num_days. "
-            "If num_days is unclear, default to 3. Return ONLY the JSON object."
+            "If end_date is unclear and num_days is present, compute it as start_date + num_days. "
+            "If num_days or duration is not explicitly mentioned, return null for both num_days and end_date. NEVER guess. Return ONLY the JSON object."
         )
         user = (
             f"Current IST datetime: {get_ist_datetime_str()}\n"
@@ -537,10 +540,30 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.info("[extract_prefs] Processing user text: %s", text[:80])
 
         # Capture explicit URLs directly from user text.
+        ref_fetched = False
         for m in re.findall(r"https?://\S+", text):
             url = m.rstrip(".,);]}")
             if url not in prefs.reference_urls:
                 prefs.reference_urls.append(url)
+                
+                if "youtube" in url.lower() or "youtu.be" in url.lower():
+                    logger.info("[extract_prefs] Auto-fetching YouTube transcript for %s", url)
+                    try:
+                        yt_text, _ = get_youtube_transcript(url)
+                        if yt_text:
+                            prefs.reference_content = (prefs.reference_content or "") + f"\n\n[YouTube transcript for {url}]\n" + yt_text[:8000]
+                            ref_fetched = True
+                    except Exception as e:
+                        logger.warning("Failed to auto-fetch YT transcript: %s", e)
+                else:
+                    logger.info("[extract_prefs] Auto-fetching blog content for %s", url)
+                    try:
+                        b_text = extract_blog_content(url)
+                        if b_text:
+                            prefs.reference_content = (prefs.reference_content or "") + f"\n\n[Blog content for {url}]\n" + b_text[:8000]
+                            ref_fetched = True
+                    except Exception as e:
+                        logger.warning("Failed to auto-fetch Blog content: %s", e)
 
         location_changed = False
         dates_changed = False
@@ -555,7 +578,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 "You extract travel preferences from conversation. "
                 "Return a JSON object with keys: origin, destination, dates, duration, budget, experience, travelers. "
                 "Set a field to the extracted value string if the user clearly stated it in the latest message. "
-                "Set a field to null if not mentioned or already known. "
+                "Set a field to null if not mentioned or already known. NEVER guess duration or budget if not explicitly stated. "
                 "For origin: where they are coming FROM. "
                 "For travelers: solo/just me → \"solo\", friends → \"with friends\", family → \"with family\". "
                 "Return ONLY the JSON object, nothing else."

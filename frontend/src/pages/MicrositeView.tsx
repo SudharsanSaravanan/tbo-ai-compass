@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   MapPin, Utensils, Camera, Bus, Clock, Youtube, Cloud,
   ChevronDown, ChevronUp, Compass, CheckSquare,
-  Sun, CloudSun, CloudRain, CloudSnow, Wind, Cloudy
+  Sun, CloudSun, CloudRain, CloudSnow, Wind, Cloudy, Globe, Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import MapCard from "@/components/MapCard";
 import TripChecklist from "@/components/TripChecklist";
 import tboLogo from "@/assets/tbo-logo.png";
+import { fetchTboCityCode, fetchTboHotels, TboHotel } from "@/services/tboHotelService";
 
 const FULL_ITINERARY = [
   {
@@ -124,6 +126,31 @@ export default function MicrositeView() {
   const [collapsedDays, setCollapsedDays] = useState<Set<number>>(new Set());
   const tripDates = getTripDates();
   const destination = "Bali";
+
+  const [hotels, setHotels] = useState<TboHotel[]>([]);
+  const [hotelsLoading, setHotelsLoading] = useState(false);
+  const [selectedHotelIndex, setSelectedHotelIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    const loadHotels = async () => {
+      setHotelsLoading(true);
+      try {
+        let cityCode = await fetchTboCityCode(destination);
+        if (!cityCode) {
+          cityCode = await fetchTboCityCode(destination.split(',')[0]);
+        }
+        if (cityCode) {
+          const hotelsLists = await fetchTboHotels(cityCode);
+          setHotels(hotelsLists.slice(0, 10));
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setHotelsLoading(false);
+      }
+    };
+    loadHotels();
+  }, [destination]);
 
   const toggleDay = (dayIdx: number) => {
     setCollapsedDays((prev) => {
@@ -300,6 +327,37 @@ export default function MicrositeView() {
               ))}
             </div>
           </div>
+
+          {/* Suggested Hotels */}
+          <div className="mt-8 border-t border-border pt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Globe className="h-4 w-4 text-blue-500" />
+              <span className="text-sm font-semibold text-foreground">Suggested Hotels</span>
+              {hotelsLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-auto" />}
+            </div>
+            {hotels.length === 0 && !hotelsLoading ? (
+              <div className="text-xs text-muted-foreground p-3 bg-accent rounded-xl">
+                No hotels found for this city.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {hotels.map((h, i) => (
+                  <div key={h.HotelCode} className={cn("rounded-xl border border-border bg-card p-3 transition-colors cursor-pointer", selectedHotelIndex === i ? "border-primary bg-primary/5" : "hover:shadow-md")} onClick={() => setSelectedHotelIndex(i)}>
+                    <p className="font-semibold text-sm line-clamp-1" title={h.HotelName}>{h.HotelName}</p>
+                    <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">{h.Address}</p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {h.PhoneNumber && <a href={`tel:${h.PhoneNumber}`} className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1 hover:bg-primary/20 transition-colors" target="_blank" onClick={(e) => e.stopPropagation()}><MapPin className="h-2 w-2" /> Call</a>}
+                      {h.HotelWebsiteUrl && <a href={h.HotelWebsiteUrl} target="_blank" className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1 hover:bg-primary/20 transition-colors" onClick={(e) => e.stopPropagation()}><Globe className="h-2 w-2" /> Website</a>}
+                    </div>
+                    <div className="mt-3 pt-3 flex gap-2 border-t border-border">
+                      <Button size="sm" variant="ghost" className="h-7 text-xs flex-1 rounded-md bg-accent/50" onClick={(e) => { e.stopPropagation(); setSelectedHotelIndex(i); }}>View on Map</Button>
+                      <Button size="sm" className="h-7 text-xs flex-1 rounded-md" aria-label="Book Hotel" onClick={(e) => { e.stopPropagation(); }}>Book Now</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right — Map */}
@@ -309,7 +367,18 @@ export default function MicrositeView() {
             <span className="text-sm font-semibold text-foreground">Trip Map</span>
           </div>
           <div className="flex-1 relative">
-            <MapCard className="w-full h-full overflow-hidden" />
+            <MapCard
+              className="w-full h-full overflow-hidden"
+              locations={
+                selectedHotelIndex !== null && hotels[selectedHotelIndex] && hotels[selectedHotelIndex].Map
+                  ? [{
+                    lat: parseFloat(hotels[selectedHotelIndex].Map.split("|")[0]),
+                    lng: parseFloat(hotels[selectedHotelIndex].Map.split("|")[1]),
+                    title: hotels[selectedHotelIndex].HotelName
+                  }]
+                  : undefined
+              }
+            />
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import { useMemo, useEffect } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import { MapPin } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -34,6 +34,17 @@ const staticLocations: MapLocation[] = [
     { lat: 28.62, lng: 77.22, title: "Checkpoint" },
     { lat: 28.63, lng: 77.23, title: "Destination" },
 ];
+
+function MapUpdater({ center }: { center: [number, number] }) {
+    const map = useMap();
+    useEffect(() => {
+        map.flyTo(center, Math.max(map.getZoom(), 13), {
+            animate: true,
+            duration: 1.5
+        });
+    }, [center, map]);
+    return null;
+}
 
 export default function MapCard({
     locations = staticLocations,
@@ -76,6 +87,8 @@ export default function MapCard({
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
+
+                <MapUpdater center={center} />
 
                 {locations.map((loc, idx) => (
                     <Marker key={idx} position={[loc.lat, loc.lng]}>

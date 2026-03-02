@@ -595,11 +595,13 @@ Output ONLY the English translation, no explanations or quotes.
 
 Text:
 {chunk}"""
+            print(f"    [translate] HF chunk ({len(chunk)} chars)...")
             completion = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
                 max_tokens=min(16384, len(chunk) // 2 + 1000),
+                timeout=getattr(config, "TRANSLATION_TIMEOUT", 30),
             )
             out = (completion.choices[0].message.content or "").strip()
             return out if out else chunk
@@ -872,15 +874,42 @@ class YouTubePipeline:
 
             if lang_code and lang_code not in config.ENGLISH_LANGUAGE_CODES and config.TRANSLATE_TO_ENGLISH:
                 t0 = time.perf_counter()
-                transcript_text = self.translator.translate_to_english(
-                    transcript_text, source_language_code=lang_code
-                ) or transcript_text
+                translate_timeout = getattr(config, "TRANSLATION_TOTAL_TIMEOUT", 45)
+                print(f"    Translating from '{lang_code}' ({len(transcript_text)} chars, timeout={translate_timeout}s)...")
+                try:
+                    from concurrent.futures import ThreadPoolExecutor as _TP, TimeoutError as _TE
+                    with _TP(max_workers=1) as _ex:
+                        _fut = _ex.submit(
+                            self.translator.translate_to_english,
+                            transcript_text,
+                            lang_code,
+                        )
+                        translated = _fut.result(timeout=translate_timeout)
+                        transcript_text = translated or transcript_text
+                except _TE:
+                    print(f"  ⚠ Translation timed out after {translate_timeout}s — using original transcript")
+                except Exception as te:
+                    print(f"  ⚠ Translation failed: {te} — using original transcript")
                 print(f"    Translated in {time.perf_counter() - t0:.1f}s")
 
             t0 = time.perf_counter()
-            transcript_summary = self._summarize_transcript(
-                transcript_text, candidate["title"], parsed_intent
-            )
+            print(f"    Summarizing transcript ({len(transcript_text)} chars)...")
+            try:
+                from concurrent.futures import ThreadPoolExecutor as _TP2, TimeoutError as _TE2
+                with _TP2(max_workers=1) as _ex2:
+                    _fut2 = _ex2.submit(
+                        self._summarize_transcript,
+                        transcript_text,
+                        candidate["title"],
+                        parsed_intent,
+                    )
+                    transcript_summary = _fut2.result(timeout=60)
+            except _TE2:
+                print(f"  ⚠ Summarization timed out after 60s — skipping summary")
+                transcript_summary = ""
+            except Exception as se:
+                print(f"  ⚠ Summarization failed: {se}")
+                transcript_summary = ""
             print(f"    Summarized in {time.perf_counter() - t0:.1f}s ({len(transcript_summary)} chars)")
 
             candidate["has_transcript"] = True

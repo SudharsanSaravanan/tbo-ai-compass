@@ -11,6 +11,13 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    proxy: {
+      "/tbo-api": {
+        target: "http://api.tbotechnology.in",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/tbo-api/, ""),
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

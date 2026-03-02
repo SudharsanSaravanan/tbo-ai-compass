@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -23,13 +23,16 @@ import {
   MessageSquare,
   X,
   Send,
+  Globe,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
-import MapCard from "@/components/MapCard";
+import MapCard, { MapLocation } from "@/components/MapCard";
 import TripChecklist from "@/components/TripChecklist";
 import tboLogo from "@/assets/tbo-logo.png";
+import { fetchTboCityCode, fetchTboHotels, TboHotel } from "@/services/tboHotelService";
 
 // ────────────────────────────────────────────────
 // Data
@@ -161,7 +164,35 @@ export default function SharedItinerary() {
   const [requestSent, setRequestSent] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const [hotels, setHotels] = useState<TboHotel[]>([]);
+  const [hotelsLoading, setHotelsLoading] = useState(false);
+  const [selectedHotelIndex, setSelectedHotelIndex] = useState<number | null>(null);
+
   const tripDates = getTripDates();
+
+
+
+  useEffect(() => {
+    const loadHotels = async () => {
+      if (!destination) return;
+      setHotelsLoading(true);
+      try {
+        let cityCode = await fetchTboCityCode(destination);
+        if (!cityCode) {
+          cityCode = await fetchTboCityCode(destination.split(',')[0]);
+        }
+        if (cityCode) {
+          const hotelsLists = await fetchTboHotels(cityCode);
+          setHotels(hotelsLists.slice(0, 10));
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setHotelsLoading(false);
+      }
+    };
+    loadHotels();
+  }, [destination]);
 
   const toggleDay = (dayIdx: number) => {
     setCollapsedDays((prev) => {
@@ -461,6 +492,36 @@ export default function SharedItinerary() {
               ))}
             </div>
           </div>
+
+          {/* Suggested Hotels */}
+          <div className="mt-8 border-t border-border pt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Globe className="h-4.5 w-4.5 text-blue-500" />
+              <span className="text-sm font-semibold">Suggested Hotels</span>
+              {hotelsLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-auto" />}
+            </div>
+            {hotels.length === 0 && !hotelsLoading ? (
+              <div className="text-xs text-muted-foreground p-3 bg-accent rounded-xl">
+                No hotels found for this city.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {hotels.map((h, i) => (
+                  <div key={h.HotelCode} className={cn("rounded-xl border border-border bg-card p-3 transition-colors cursor-pointer", selectedHotelIndex === i ? "border-primary bg-primary/5" : "hover:shadow-md")} onClick={() => setSelectedHotelIndex(i)}>
+                    <p className="font-semibold text-sm line-clamp-1" title={h.HotelName}>{h.HotelName}</p>
+                    <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">{h.Address}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {h.PhoneNumber && <a href={`tel:${h.PhoneNumber}`} className="text-[10px] text-primary bg-primary/10 px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 hover:bg-primary/20 transition-colors" target="_blank" onClick={(e) => e.stopPropagation()}><MapPin className="h-3 w-3" /> Call</a>}
+                      {h.HotelWebsiteUrl && <a href={h.HotelWebsiteUrl} target="_blank" className="text-[10px] text-primary bg-primary/10 px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 hover:bg-primary/20 transition-colors" onClick={(e) => e.stopPropagation()}><Globe className="h-3 w-3" /> Website</a>}
+                    </div>
+                    <div className="mt-3 pt-3 border-t flex justify-end">
+                      <Button size="sm" className="h-8 text-xs w-full rounded-md" aria-label="Book Hotel" onClick={(e) => { e.stopPropagation(); alert('Booking feature coming soon!'); }}>Book Now</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right – Map */}
@@ -470,7 +531,18 @@ export default function SharedItinerary() {
             <span className="text-base font-semibold">Trip Map</span>
           </div>
           <div className="flex-1 relative">
-            <MapCard className="absolute inset-0 w-full h-full" />
+            <MapCard
+              className="absolute inset-0 w-full h-full"
+              locations={
+                selectedHotelIndex !== null && hotels[selectedHotelIndex] && hotels[selectedHotelIndex].Map
+                  ? [{
+                    lat: parseFloat(hotels[selectedHotelIndex].Map.split("|")[0]),
+                    lng: parseFloat(hotels[selectedHotelIndex].Map.split("|")[1]),
+                    title: hotels[selectedHotelIndex].HotelName
+                  }]
+                  : undefined
+              }
+            />
           </div>
         </div>
       </div>
