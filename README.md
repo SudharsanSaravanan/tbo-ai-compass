@@ -1,91 +1,69 @@
-# YouTube Travel Video Analysis Pipeline
+<img width="951" height="262" alt="tbo-logo-2-removebg-preview" src="https://github.com/user-attachments/assets/1cbbb68c-5527-439a-a523-a3f1829f8322" />
 
-A comprehensive AI-powered pipeline that analyzes YouTube videos for travel route planning. The system intelligently finds, ranks, and scores travel videos based on route coverage, actionability, and authenticity.
+<br>
+<br>
 
-## Sample Usage
+<h1 align="center">Made as part of</h1>
 
-```
-======================================================================
+<br>
 
-Enter your travel query: coimbatore to munaar family trip
-
-======================================================================
-YOUTUBE TRAVEL VIDEO ANALYSIS PIPELINE
-Using yt-dlp for search (0 API quota) + YouTube API for metrics
-======================================================================
-
-[1/6] Parsing user query...
-  ✓ Origin: Coimbatore
-  ✓ Destination: Munnar
-  ✓ Travel Style: family
-
-[2/6] Generating YouTube search queries...
-  ✓ Generated 6 search queries:
-    1. "coimbatore to munnar family road trip vlog"
-    2. "munnar family itinerary guide from coimbatore"
-    3. "budget travel coimbatore to munnar journey"
-    4. "coimbatore munnar family travel tips vlog"
-    5. "scenic route coimbatore to munnar road trip"
-    6. "family adventure munnar guide from coimbatore"
-
-[3/6] Searching YouTube using yt-dlp (NO API QUOTA!)...
-  ✓ Found 31 unique videos (0 quota units used)
-
-[4/6] Enriching videos with YouTube API (videos.list - cheap!)...
-  ✓ Enriched 22 videos (after filtering)
-  ✓ API quota used: ~1 units (vs 600+ with search.list!)
-  ✓ Selected top 15 for deep analysis
-
-[5/6] Analyzing 15 videos (workers=7)...
-       Progress: [completed/15] | transcript | translate | score | total time
-       ------------------------------------------------------------
-  [1/15] Epic Coimbatore to Munnar Family Road Trip... | transcript 1.2s | translate 0.0s | score 0.7s | total 1.9s | R:0.30 A:0.00 Auth:0.30 ✓
-  [2/15] ₹400 ல Munnar + Vattavada - அ one day-ல சு... | transcript 1.3s | translate 0.0s | score 1.2s | total 2.5s | R:0.30 A:0.50 Auth:0.70 ✓
-  [3/15] MUNNAR TRAVEL GUIDE | 40+ Places, Cool Bud... | transcript 1.3s | translate 0.0s | score 1.4s | total 2.7s | R:0.30 A:0.70 Auth:1.00 ✓
-  [4/15] Coimbatore to Munnar  I  மூணாறு, கேரளா   I... | transcript 1.6s | translate 0.0s | score 1.5s | total 3.1s | R:0.30 A:0.00 Auth:0.70 ✓
-  [5/15] Top 20 MUNNAR Tourist places - Ultimate Tr... | transcript 1.9s | translate 0.0s | score 0.6s | total 2.4s | R:0.30 A:0.00 Auth:0.30 ✓
-  [6/15] 😍3 Days in Munnar ⛰🍃| Complete Travel Guid... | transcript 3.5s | translate 0.0s | score 1.0s | total 4.5s | R:0.00 A:0.50 Auth:0.70 ✓
-  [7/15] 3500ல LUXURY MUNNAR PACKAGEஆ? அதுவும் 2 DA... | transcript 1.7s | translate 0.0s | score 4.5s | total 6.2s | R:0.30 A:0.00 Auth:0.30 ✓
-  [8/15] 😍Anakulam 2 Days Travel Guide | Elephant E... | transcript 4.1s | translate 0.0s | score 7.5s | total 11.6s | R:0.00 A:0.00 Auth:0.00 ✓
-  [9/15] Munnar Travel Guide 2025  I Munnar Tourist... | transcript 0.9s | translate 19.8s | score 1.4s | total 22.0s | R:0.30 A:0.70 Auth:0.70 ✓
-  [10/15] Things To Do In Munnar In Three Days - Tea... | transcript 3.5s | translate 0.0s | score 28.8s | total 32.3s | R:0.00 A:0.00 Auth:0.00 ✓
-  [11/15] COIMBATORE TO MUNNAR | BIKE RIDE | DAY 1 |... | transcript 1.5s | translate 42.8s | score 15.2s | total 59.5s | R:0.30 A:0.50 Auth:0.70 ✓
-  [12/15] Kerala 7 Nights & 8 Days Itinerary | Kochi... | transcript 1.2s | translate 66.7s | score 16.7s | total 84.6s | R:0.00 A:1.00 Auth:1.00 ✓
-  [13/15] மூணார் 3 நாள் டூர் #munnar best tour packa... | transcript 1.2s | translate 72.6s | score 38.9s | total 112.7s | R:0.30 A:1.00 Auth:0.70 ✓
-  [14/15] Munnar Budget Trip 2026 | மூணாறு சுற்றுலா ... | transcript 1.0s | translate 121.1s | score 17.6s | total 139.8s | R:0.30 A:0.70 Auth:0.70 ✓
-  ⚠ Hugging Face translate error: Error code: 402 - {'error': 'Credit balance is depleted: purchase pre-paid credits to continue using Inference Providers with your account. Alternatively, subscribe to PRO to get 20x more included usage.'}
-  [15/15] மூணார் 3 நாள் டூர் #munnar package tamil |... | transcript 0.9s | translate 244.2s | score 2.1s | total 247.2s | R:0.30 A:1.00 Auth:0.70 ✓
-       ------------------------------------------------------------
-  Step 5 completed in 261.3s (15 videos, 7 workers)
-
-[6/6] Generating analysis report...
-  ✓ Report saved to: analysis_Coimbatore_to_Munnar_20260221_235259.txt
-
-======================================================================
-PIPELINE COMPLETE
-======================================================================
+<p align="center">
+  <img 
+    width="150" 
+    height="150" 
+    alt="tbo-hack" 
+    src="https://github.com/user-attachments/assets/95df478d-15bd-4f5e-907a-05269a498910" 
+  />
+</p>
 
 
-✓ Analysis complete!
-  - Analyzed 15 videos
-  - Report: analysis_Coimbatore_to_Munnar_20260221_235259.txt
+<br>
 
-🎥 TOP 3 RECOMMENDATIONS:
+![Python 3](https://img.shields.io/badge/Python3-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)
+![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
+![Tavily](https://img.shields.io/badge/Tavily-FF5500?style=for-the-badge&logo=search&logoColor=white)
+![Firecrawl](https://img.shields.io/badge/Firecrawl-7C3AED?style=for-the-badge&logo=apache-couchdb&logoColor=white)
 
-  1. Coimbatore to Munnar  I  மூணாறு, கேரளா   I  தமிழ்  I  Tent C
-     https://www.youtube.com/watch?v=2mjsh0MFjt0
-     Combined: 0.307 | Route: 0.30 | Action: 0.00 | Auth: 0.70
+<br />
+<h1 align="center">
+  <font size="7">TBO AI Compass </font>
+</h1>
+  <p align="center">
+    An Iternary voice agent-driven platform to optimize travel planning and booking. The system intelligently that finds, ranks, and scores travel videos based on route coverage, actionability, and authenticity.
+    <br />
+    </p>
+</p>
 
-  2. COIMBATORE TO MUNNAR | BIKE RIDE | DAY 1 | MONSOON | TAMIL |
-     https://www.youtube.com/watch?v=4rmhFd1AgSk
-     Combined: 0.453 | Route: 0.30 | Action: 0.50 | Auth: 0.70
+<br>
 
-  3. ₹400 ல Munnar + Vattavada - அ one day-ல சுத்திபார்க்க முடியு
-     https://www.youtube.com/watch?v=vobsVUdCGa4
-     Combined: 0.439 | Route: 0.30 | Action: 0.50 | Auth: 0.70
-```
+<img width="689" height="86" alt="image" src="https://github.com/user-attachments/assets/f943d093-9cbe-48ae-b8f9-331c5f8cbf3a" />
 
-## Features
+<br>
+
+<img width="1156" height="658" alt="Screenshot from 2026-03-02 21-10-42" src="https://github.com/user-attachments/assets/66a98b2b-d0ce-4e1f-be5c-e27c4c30eec4" />
+
+<br>
+<br>
+
+<img width="666" height="375" alt="Copy_of_mohan-review__6___1_-removebg-preview" src="https://github.com/user-attachments/assets/cec1f8d7-3652-427d-ac0a-294d3e1f293d" />
+
+
+[![tbo hack Prototype Launch](https://github.com/user-attachments/assets/b7036ec6-c2c6-4f90-a326-043802d25fa4)](https://www.youtube.com/watch?v=0gf3DK1YHXY)
+
+
+<br>
+
+<img width="691" height="73" alt="image" src="https://github.com/user-attachments/assets/79c56e79-f725-4847-b60f-8cea07d184ef" />
+
+<img width="1185" height="595" alt="image" src="https://github.com/user-attachments/assets/4ef5d260-12f1-4a56-b199-04f04b6ad780" />
+<img width="1184" height="380" alt="image" src="https://github.com/user-attachments/assets/9256c6f5-a35b-476b-9a6e-606dcfa6a6ae" />
+<img width="1193" height="643" alt="image" src="https://github.com/user-attachments/assets/43b13513-54c3-4169-a9de-faf096bae7cf" />
+
+
+<br>
+
+# Features
 
 - **Intelligent Query Parsing**: Uses Groq LLM to extract travel intent (origin, destination, dates, budget, style)
 - **Smart Search Query Generation**: Automatically generates 3-6 diverse YouTube search queries
@@ -328,25 +306,14 @@ pip install yt-dlp
 - Check GROQ_API_KEY in .env
 - Verify Groq account has credits
 
-## Future Enhancements
+<br>
 
-- [ ] Add support for multiple languages
-- [ ] Integrate with weather APIs
-- [ ] Extract specific route waypoints
-- [ ] Generate visual route maps
-- [ ] Export to JSON/CSV formats
-- [ ] Web interface (FastAPI backend)
-- [ ] Caching layer for search results
-- [ ] Multi-modal analysis (thumbnails, video frames)
 
-## License
+------
 
-MIT License
+![Material wave loading](https://github.com/user-attachments/assets/a08255eb-9647-471d-9881-61871332249f)
 
-## Contributing
 
-Contributions welcome! Please open an issue or PR.
 
-## Contact
+### Developed with ❤️ by [Sai Nivedh](https://github.com/SaiNIvedh26) ,  [Swetha](https://github.com/SWETHACS17) and  [Sudharshan Saravanan](https://github.com/SudharsanSaravanan)
 
-For questions or support, please open an issue on GitHub.
